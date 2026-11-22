@@ -1,0 +1,82 @@
+@use 'mixins' as *;
+
+// BossBar: boss name and segmented HP meter across the top of the course window.
+// Centred with margins (not a transform) so GSAP can own the transform for the slide and the shake.
+.boss-bar {
+  --boss: #ff4f6d;
+  --boss-deep: #7a1830;
+  position: absolute; z-index: 1; top: 8px; left: 0; right: 0; margin: 0 auto;
+  width: min(560px, calc(100% - 20px));
+  padding: 5px 9px 7px;
+  border: 1px solid #8a3a52; border-radius: 7px;
+  background: linear-gradient(180deg, #2a1220ee, #170c18e8);
+  box-shadow: 0 4px 18px #0a050f99, 0 0 0 1px #ff4f6d22 inset;
+  pointer-events: none;
+
+  &[hidden] { display: none; }
+  &.phase-2 { --boss: #ff8a3d; --boss-deep: #7a3a14; }
+  &.phase-3 { --boss: #ff3df0; --boss-deep: #6a1470; border-color: #a03a9c; }
+}
+
+.boss-bar-head {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;
+  color: var(--paper); white-space: nowrap;
+}
+.boss-bar-tag {
+  padding: 1px 4px; border-radius: 3px; background: var(--boss); color: #1a0b12;
+  font: 900 .55rem/1.1 var(--mono); letter-spacing: .14em;
+}
+.boss-bar-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-right: .2em; // italic overhang
+  font: italic 900 clamp(.85rem, 2.2vw, 1.15rem)/1 var(--display); letter-spacing: .03em;
+  color: #ffe9ee; text-shadow: 0 2px var(--boss-deep), 0 0 12px #ff4f6d55;
+}
+.boss-bar-phase {
+  margin-left: auto; color: var(--boss);
+  font: 800 .6rem/1 var(--mono); letter-spacing: .12em;
+}
+
+.boss-bar-track {
+  position: relative; height: 10px; overflow: hidden;
+  border: 1px solid #00000099; border-radius: 3px; background: #2b1a26;
+  box-shadow: 0 1px 0 #ffffff14;
+
+  // Segment separators: one notch per hit point.
+  &::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg, transparent calc(100% - 1px), #12080ecc calc(100% - 1px));
+    background-size: calc(100% / var(--segments, 30)) 100%;
+  }
+}
+.boss-bar-fill, .boss-bar-lag {
+  position: absolute; top: 0; bottom: 0; left: 0; width: var(--hp, 100%);
+}
+.boss-bar-fill {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--boss) 70%, #fff) 0 30%, var(--boss) 30% 70%, var(--boss-deep) 70%);
+  box-shadow: 0 0 10px var(--boss);
+  transition: width .12s ease-out, background .3s;
+}
+// The chunk just lost lingers in pale ink before draining away.
+.boss-bar-lag {
+  background: #ffe7c9;
+  transition: width .5s ease-in .25s;
+}
+.boss-bar-tick {
+  position: absolute; z-index: 1; top: -1px; bottom: -1px; width: 2px; margin-left: -1px;
+  background: var(--paper); box-shadow: 0 0 0 1px #12080e;
+}
+
+// The race toast moves below the bar while a boss fight is on.
+.race-window:has(.boss-bar:not([hidden])) .race-message { top: 58px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .boss-bar-fill, .boss-bar-lag { transition: none; }
+}
+
+@media (max-width: $bp-phone) {
+  .boss-bar { top: 5px; padding: 4px 7px 5px; }
+  .boss-bar-head { gap: 6px; margin-bottom: 3px; }
+  .boss-bar-tag { display: none; }
+  .boss-bar-track { height: 7px; }
+  .race-window:has(.boss-bar:not([hidden])) .race-message { top: 44px; }
+}

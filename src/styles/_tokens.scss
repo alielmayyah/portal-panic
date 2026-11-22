@@ -1,0 +1,44 @@
+// Design tokens ported from the old src/styles/arcade.css.
+// Sass variables for compile-time use; the same values are exposed as CSS custom properties on :root
+// (names match arcade.css, so ported rules using var(--green) etc. keep working).
+// Tailwind utilities for the same palette are declared in tailwind.css (@theme): bg-panel, text-green, font-display...
+
+$paper: #f7eedb;
+$mute: #b5a8ba;
+$faint: #9b8aa4;
+$line: #3b3046;
+$panel: #1e1828;
+$panel-deep: #241b2d;
+$ink: #130f1a;
+$ink-soft: #201828;
+$green: #cbf66f;
+$rick: #97edf0;
+$morty: #ffdb71;
+$shield: #70f1fa;
+$boots: #e6a7ff;
+
+$font-sans: "Segoe UI", system-ui, sans-serif;
+$font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+$font-display: Impact, Haettenschweiler, "Arial Narrow Bold", "Avenir Next Condensed", "DIN Condensed", sans-serif-condensed, sans-serif;
+
+$body-bg:
+  radial-gradient(ellipse at 32% 12%, #39234355, transparent 60%),
+  radial-gradient(ellipse at 94% 94%, #2b1f3f65, transparent 45%),
+  $ink;
+
+@mixin tokens {
+  --paper: #{$paper};
+  --mute: #{$mute};
+  --faint: #{$faint};
+  --line: #{$line};
+  --panel: #{$panel};
+  --panel-deep: #{$panel-deep};
+  --ink: #{$ink};
+  --green: #{$green};
+  --rick: #{$rick};
+  --morty: #{$morty};
+  --shield: #{$shield};
+  --boots: #{$boots};
+  --mono: #{$font-mono};
+  --display: #{$font-display};
+}

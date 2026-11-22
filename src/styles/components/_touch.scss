@@ -1,0 +1,42 @@
+@use 'mixins' as *;
+
+// TouchControls: hidden unless the device has a coarse pointer or a finger was used (.touch-input on <html>).
+.touch-controls {
+  display: none; gap: 8px; margin-top: 10px;
+  @include no-touch-select;
+  > div { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); flex: 1; min-width: 0; gap: 3px; }
+  span { grid-column: 1 / -1; color: var(--pilot); font-size: .71rem; }
+  button {
+    @include no-touch-select;
+    -webkit-tap-highlight-color: transparent;
+    padding: 5px 2px; background: #2e2239; border: 1px solid #584562; border-radius: 7px;
+    font-size: .82rem; font-weight: 750; min-height: 48px;
+    &:is([data-touch="left"], [data-touch="right"]) { font-size: 1.28rem; }
+    &[data-touch="jump"] { color: #242021; background: var(--pilot); }
+    &[data-touch="fire"] { color: #263319; background: #c5f480; }
+    &[data-touch="missile"] { color: #381915; background: #ffb386; }
+    &:active, &[data-held] { filter: brightness(.78); box-shadow: 0 0 0 2px #ffffff55 inset; }
+    &.is-empty { background: #4a3847; border-color: #6c5268; color: #e3bfce; }
+  }
+}
+@media (pointer: coarse) { .touch-controls { display: flex; } }
+.touch-input .touch-controls { display: flex; }
+
+@media (max-width: $bp-phone) {
+  .touch-controls.is-versus { flex-direction: column; }
+}
+@media (max-width: $bp-tiny) {
+  .touch-controls button:not([data-touch="left"], [data-touch="right"]) { font-size: .71rem; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .touch-controls { margin-top: 4px; }
+  .touch-controls.is-versus { flex-direction: row; width: min(670px, calc(100vw - 44px)); position: relative; left: 50%; transform: translateX(-50%); }
+  .touch-controls button { min-height: 42px; }
+}
+@media (max-width: $bp-phone) and (orientation: portrait) {
+  .touch-controls button { min-height: 54px; }
+}
+@media (max-width: $bp-tiny) and (max-height: 620px) {
+  .touch-controls button { min-height: 46px; }
+  .touch-controls.is-versus { gap: 6px; }
+}

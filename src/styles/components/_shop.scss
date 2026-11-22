@@ -1,0 +1,155 @@
+@use 'mixins' as *;
+
+// ShopScreen and the Shop* components: wallet, loadout picker, weapon and upgrade cards.
+$coin: #ffcc33;
+
+.shop {
+  padding: clamp(18px, 3.4vh, 36px) 0 30px;
+  perspective: 900px;
+}
+.shop-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 16px;
+  .back-button { flex: none; }
+}
+.shop-title {
+  flex: 1 1 260px; min-width: 0;
+  h1 {
+    margin: 0; font: italic 900 clamp(2rem, 4.4vw, 3.6rem)/1 var(--display); letter-spacing: -.02em;
+    color: var(--paper); text-shadow: 0 .05em #4b324a;
+    span { color: var(--green); }
+  }
+  p { margin: 4px 0 0; color: var(--mute); font-size: .8rem; line-height: 1.35; max-width: 60ch; }
+}
+
+.shop-coin {
+  display: inline-block; flex: none; width: .95em; height: .95em; border-radius: 50%; vertical-align: -.12em;
+  background: radial-gradient(circle at 35% 30%, #fff3b8 0 18%, $coin 40%, #c58a1a 100%);
+  box-shadow: 0 0 0 1px #8a5a12, 0 0 10px #ffcc3355;
+}
+.shop-wallet {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; flex: none;
+  border: 1px solid #6b5426; border-radius: 10px; background: linear-gradient(160deg, #3a2c19, #231a12);
+  .shop-coin { font-size: 1.35rem; }
+  strong { display: inline-block; min-width: 3ch; color: $coin; font: 800 1.5rem/1 var(--mono); text-align: right; }
+  small { color: #d8b878; font: 700 .62rem/1 var(--mono); letter-spacing: .1em; }
+}
+
+.shop-loadout {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-bottom: 18px;
+  padding: 10px 12px; @include arcade-panel; border-radius: 12px;
+  > span { color: var(--mute); font-size: .8rem; font-weight: 700; }
+}
+.shop-pilot {
+  display: grid; gap: 2px; text-align: left; min-height: 44px; padding: 6px 12px;
+  border: 1px solid #514157; border-radius: 8px; background: #2c2236;
+  strong { font-size: .9rem; }
+  small { color: var(--mute); font: 600 .66rem/1.2 var(--mono); }
+  &:hover { border-color: #806b87; }
+  &[aria-pressed="true"] { border-color: var(--pilot); box-shadow: 0 0 0 1px var(--pilot) inset; strong { color: var(--pilot); } }
+  &--rick { --pilot: var(--rick); }
+  &--morty { --pilot: var(--morty); }
+}
+.shop-hint { margin: 0 0 0 auto; color: var(--faint); font-size: .74rem; }
+
+.shop-section { margin: 4px 0 10px; font-size: 1.02rem; font-weight: 800; }
+.shop-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 212px), 1fr)); gap: 12px; margin-bottom: 22px;
+}
+
+.shop-card {
+  --weapon: var(--green);
+  --weapon-glow: #fff;
+  position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px;
+  border: 1px solid #4a3a52; border-radius: 12px;
+  background: linear-gradient(165deg, color-mix(in srgb, var(--weapon) 12%, var(--panel)), var(--panel) 60%);
+  transform-style: preserve-3d;
+  transition: border-color .15s ease, transform .15s ease;
+  &:hover { border-color: color-mix(in srgb, var(--weapon) 60%, #4a3a52); transform: translateY(-2px); }
+  &[data-equipped] { border-color: var(--weapon); box-shadow: 0 0 0 1px var(--weapon) inset, 0 0 24px color-mix(in srgb, var(--weapon) 22%, transparent); }
+  h3 { margin: 0; font-size: 1rem; font-weight: 800; color: var(--paper); }
+  p { margin: 0; color: var(--mute); font-size: .78rem; line-height: 1.35; flex: 1; }
+}
+.shop-card--upgrade { --weapon: #{$coin}; }
+.shop-card-art {
+  position: relative; display: grid; place-items: center; height: 74px; border-radius: 8px;
+  background: radial-gradient(ellipse at 60% 50%, color-mix(in srgb, var(--weapon) 30%, transparent), transparent 70%), #17111e;
+  color: var(--weapon); overflow: hidden;
+  @include crt-overlay;
+  svg { width: 112px; height: 70px; filter: drop-shadow(0 0 6px var(--weapon)); }
+}
+.shop-badges { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; z-index: 1; }
+.shop-badge {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  font: 800 .64rem/1 var(--mono); font-style: normal; color: #1a1420;
+  &--rick { background: var(--rick); }
+  &--morty { background: var(--morty); }
+}
+
+.shop-stats { display: grid; gap: 4px; }
+.shop-stat {
+  display: grid; grid-template-columns: 66px 1fr 52px; align-items: center; gap: 6px;
+  small { color: var(--faint); font: 700 .58rem/1 var(--mono); letter-spacing: .06em; }
+  b { color: #e6dbe9; font: 700 .66rem/1 var(--mono); text-align: right; }
+}
+.shop-stat-bar {
+  height: 6px; border-radius: 3px; background: #2d2335; overflow: hidden;
+  i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--weapon), var(--weapon-glow)); }
+}
+
+.shop-pips {
+  display: flex; align-items: center; gap: 5px;
+  i { width: 14px; height: 8px; border-radius: 3px; background: #2d2335; border: 1px solid #5a4a46; }
+  i.on { background: $coin; border-color: #ffe48a; box-shadow: 0 0 6px #ffcc3366; }
+  small { margin-left: auto; color: var(--mute); font: 650 .66rem/1 var(--mono); }
+}
+
+.shop-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.shop-price {
+  display: inline-flex; align-items: center; gap: 5px; color: $coin; font: 800 .95rem/1 var(--mono);
+  &--owned { color: var(--green); font-size: .72rem; letter-spacing: .08em; }
+}
+.shop-action {
+  min-height: 36px; padding: 6px 12px; border-radius: 7px; font-size: .8rem; font-weight: 800;
+  border: 1px solid #675572; background: #3b3047; color: var(--paper);
+  &:hover:not(:disabled) { border-color: var(--weapon); color: var(--weapon); }
+  &[aria-pressed="true"] { opacity: 1; border-color: var(--weapon); color: var(--weapon); background: #261d2e; }
+  &--buy {
+    background: var(--green); border-color: #d8ff91; color: #252c18; box-shadow: 0 2px 0 #819e48;
+    &:hover:not(:disabled) { background: #dcff99; color: #252c18; border-color: #d8ff91; }
+    &[aria-disabled="true"] { background: #3b3047; border-color: #514157; color: var(--faint); box-shadow: none; cursor: not-allowed; }
+  }
+}
+
+.shop-float {
+  position: absolute; top: 40%; left: 50%; translate: -50% 0; pointer-events: none; z-index: 2;
+  color: $coin; font: 900 1.3rem/1 var(--mono); text-shadow: 0 2px 0 #5a3c0c, 0 0 14px #ffcc3399;
+}
+.shop-status { min-height: 1.4em; margin: 0; color: #e8dcb6; font-size: .82rem; }
+
+@media (max-width: $bp-phone) {
+  .shop-hint { margin-left: 0; flex-basis: 100%; }
+  .shop-wallet { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-card { transition: none; &:hover { transform: none; } }
+}
+@media (forced-colors: active) {
+  .shop-card[data-equipped], .shop-pilot[aria-pressed="true"] { border: 3px solid Highlight; }
+  .shop-stat-bar i { background: Highlight; }
+}
+
+// Garage: Shop button with the wallet.
+.shop-button {
+  display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; min-height: 42px; margin-top: 10px;
+  border: 1px solid #6b5426; border-radius: 7px; background: linear-gradient(160deg, #3a2c19, #231a12);
+  color: #f3e2b8; font-size: .86rem; font-weight: 800;
+  &:hover { border-color: $coin; color: $coin; }
+  b { color: $coin; font: 800 .86rem/1 var(--mono); }
+}
+
+// In-run HUD: held weapon and run coins.
+.runner-weapon {
+  display: inline-flex; align-items: center; gap: 5px; color: #e6dbe9; font: 700 .66rem/1.2 var(--mono);
+  i { width: 8px; height: 8px; border-radius: 50%; background: var(--weapon, var(--green)); box-shadow: 0 0 6px var(--weapon, var(--green)); }
+  b { color: $coin; font-weight: 800; }
+}

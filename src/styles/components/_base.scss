@@ -1,0 +1,72 @@
+@use 'mixins' as *;
+
+// Buttons, keycaps and small marks shared by several components.
+// Tailwind v4 preflight drops the pointer cursor and heading weights; restore what arcade.css relied on.
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+.icon-button {
+  width: 39px; height: 39px; display: grid; place-items: center;
+  background: #241b2d; border: 1px solid var(--line); border-radius: 9px; color: #dbd1df;
+  &:hover:not(:disabled) { border-color: #a2b86b; color: var(--green); }
+  svg { width: 19px; height: 19px; }
+}
+.help-button { font: 750 1.13rem/1 var(--mono); }
+
+.primary-button {
+  min-height: 49px; background: var(--green); color: #252c18;
+  border: 1px solid #d8ff91; border-radius: 7px; padding: 10px 13px; font-weight: 850;
+  box-shadow: 0 3px 0 #819e48;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+  &:hover { background: #dcff99; transform: translateY(-1px); }
+  &:active { transform: translateY(2px); }
+}
+
+.back-button {
+  border: 1px solid var(--line); border-radius: 7px; background: #241b2d;
+  padding: 8px 12px; font-size: .88rem; font-weight: 700;
+  &:hover { border-color: #8a7895; background: #32243a; }
+  span { color: var(--green); margin-right: 5px; }
+}
+
+.text-button {
+  margin-top: 10px; min-height: 42px; border: 0; background: none; color: #ded1e8;
+  padding: 6px 2px; font-size: .82rem; text-decoration: underline; text-underline-offset: 3px;
+  &:hover { color: var(--green); }
+}
+
+.fullscreen-button {
+  display: inline-flex; align-items: center; gap: 6px; flex: none; min-height: 39px; padding: 5px 9px;
+  border: 1px solid var(--line); border-radius: 8px; background: #241b2d; color: var(--paper);
+  font-size: .76rem; font-weight: 750; white-space: nowrap;
+  svg { width: 16px; height: 16px; flex: none; }
+  &:hover, &.is-active { border-color: #829557; color: var(--green); }
+}
+
+kbd {
+  display: inline-grid; place-items: center; min-width: 20px; padding: .22em .36em;
+  font: 700 .72rem/1.05 var(--mono);
+  border: 1px solid #584861; border-bottom-width: 2px; border-radius: 4px;
+  background: #2b2234; color: #e7dbeb;
+}
+
+.lab-dot {
+  width: 7px; height: 7px; display: inline-block; border-radius: 2px;
+  background: var(--green); transform: rotate(45deg); margin-right: 2px;
+  &--shield { background: #70f1fa; }
+  &--boots { background: #e6a7ff; }
+}
+
+.control-group {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px 13px;
+  > strong { color: #97edf0; }
+  + .control-group > strong { color: #ffdb71; }
+}
+.control-pair { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+@media (max-width: $bp-tiny) {
+  .icon-button { width: 36px; height: 36px; }
+}
+@media (max-width: 420px) {
+  .fullscreen-button { min-height: 36px; padding-inline: 6px; font-size: .68rem; svg { display: none; } }
+}

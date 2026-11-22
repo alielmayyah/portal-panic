@@ -1,0 +1,45 @@
+// Shared helpers for the component partials. Colours come from the :root custom properties
+// (--paper, --mute, --faint, --line, --panel, --green, --mono, --display) defined in _tokens.scss.
+
+$bp-tablet: 880px;
+$bp-phone: 660px;
+$bp-tiny: 360px;
+
+// Game screen is showing (replaces the old body:has(#game:not([hidden])) selector).
+$in-game: 'body:has(.race-frame)';
+
+@mixin arcade-panel {
+  overflow: hidden;
+  border: 1px solid #47364e;
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 16px 52px #08050e6e, 0 1px 0 #f8dbff0a inset;
+}
+
+// CRT scanlines plus an inner vignette over the game window.
+@mixin crt-overlay($background: repeating-linear-gradient(180deg, #21122c1b 0 1px, transparent 1px 4px)) {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: $background;
+    box-shadow: 0 0 35px #22143168 inset;
+  }
+}
+
+@mixin no-touch-select {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+// Container the Phaser canvas fills (Scale.RESIZE reads the parent size).
+@mixin phaser-stage($ratio: #{960 / 420}) {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: $ratio;
+  > canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
+}

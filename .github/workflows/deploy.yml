@@ -27,6 +27,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run build
       - name: Standalone build is up to date
         run: git diff --exit-code --stat -- portal-panic.html || { echo "::error file=portal-panic.html::portal-panic.html is stale. Run npm run build and commit it."; exit 1; }

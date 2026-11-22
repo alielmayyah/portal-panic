@@ -1,0 +1,44 @@
+// App stylesheet: tokens, page globals ported from the old arcade.css, then every component partial.
+// Tailwind itself is imported from tailwind.css (see main.tsx).
+@use 'tokens' as *;
+@use 'components';
+
+:root {
+  @include tokens;
+  font-family: $font-sans;
+  color: $paper;
+  background: $ink;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-width: 280px;
+  min-height: 100svh;
+  background: $body-bg;
+}
+
+// Faint dot grid over the page background.
+body::before {
+  position: fixed;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(#e5beee20 .7px, transparent .7px) 0 0 / 22px 22px;
+  mask-image: linear-gradient(180deg, black, transparent 95%);
+}
+
+::selection { background: var(--green); color: #201828; }
+
+// Visually hidden but still in the accessibility tree (the SrStatus live region).
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; }
+}

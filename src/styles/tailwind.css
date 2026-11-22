@@ -1,0 +1,19 @@
+/* Tailwind v4 entry, processed by @tailwindcss/vite. Kept as plain CSS (Sass would try to resolve the import itself). */
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f7eedb;
+  --color-mute: #b5a8ba;
+  --color-faint: #9b8aa4;
+  --color-line: #3b3046;
+  --color-panel: #1e1828;
+  --color-ink: #130f1a;
+  --color-green: #cbf66f;
+  --color-rick: #97edf0;
+  --color-morty: #ffdb71;
+  --color-shield: #70f1fa;
+  --color-boots: #e6a7ff;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --font-display: Impact, Haettenschweiler, "Arial Narrow Bold", "Avenir Next Condensed", "DIN Condensed", sans-serif-condensed, sans-serif;
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+}

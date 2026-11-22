@@ -1,0 +1,12 @@
+// Component styles. main.scss loads them all with: @use 'components';
+// They expect the :root custom properties from _tokens.scss (--paper, --mute, --faint, --line,
+// --panel, --green, --mono, --display) and the base button/heading resets from main.scss.
+@use 'base';
+@use 'shell';
+@use 'garage';
+@use 'game';
+@use 'boss';
+@use 'touch';
+@use 'dialogs';
+@use 'cheat-console';
+@use 'shop';

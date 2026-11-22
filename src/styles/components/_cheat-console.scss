@@ -1,0 +1,40 @@
+@use 'mixins' as *;
+
+@keyframes cheat-caret {
+  50% { border-color: transparent; }
+}
+@keyframes cheat-scan {
+  from { background-position: 0 0; }
+  to { background-position: 0 8px; }
+}
+
+// CheatConsole overlay, docked at the top of the course window.
+.cheat-console {
+  position: absolute; z-index: 3; top: 8px; left: 50%; transform: translateX(-50%);
+  width: min(calc(100% - 16px), 420px); padding: 9px 11px 8px;
+  border: 1px solid #ff7a6a; border-radius: 8px;
+  background:
+    repeating-linear-gradient(180deg, #ff5a4a0d 0 1px, transparent 1px 4px),
+    linear-gradient(160deg, #2a1220f2, #170d1df2);
+  box-shadow: 0 0 0 1px #00000066, 0 10px 30px #08050ecc, 0 0 22px #ff5a4a33;
+  color: var(--paper); font: 700 .8rem/1.2 var(--mono);
+  user-select: text; -webkit-user-select: text; touch-action: auto;
+  animation: cheat-scan .6s linear infinite;
+}
+.cheat-console__prompt { color: #ffb0a3; letter-spacing: .08em; white-space: nowrap; }
+.cheat-console__input {
+  padding: 5px 7px; border: 0; border-bottom: 2px solid var(--green); border-radius: 3px;
+  background: #0e0814; color: var(--green); caret-color: var(--green);
+  font: 700 .9rem/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  &:focus { outline: none; animation: cheat-caret 1s steps(1) infinite; }
+}
+.cheat-console__help { margin: 6px 0 0; color: var(--faint); font-size: .62rem; letter-spacing: .05em; }
+.cheat-console__feedback {
+  margin: 4px 0 0; min-height: 1.2em; font-size: .7rem; color: var(--mute);
+  &.is-ok { color: var(--green); }
+  &.is-error { color: #ff9a8a; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cheat-console, .cheat-console__input:focus { animation: none; }
+}

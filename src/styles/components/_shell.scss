@@ -1,0 +1,62 @@
+@use 'mixins' as *;
+
+// Masthead and footer (Masthead / Footer components).
+.masthead {
+  display: flex; justify-content: space-between; align-items: center; gap: 14px;
+  border-bottom: 1px solid var(--line); padding-bottom: 16px;
+}
+.brand {
+  padding: 0; border: 0; background: none; display: flex; align-items: center; gap: 12px; text-align: left;
+  strong { display: block; font-size: .94rem; letter-spacing: .085em; line-height: 1.05; font-weight: 900; }
+  small { display: block; margin-top: .38rem; font: 600 .59rem/1.3 var(--mono); letter-spacing: .115em; color: var(--faint); }
+}
+.brand-mark {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border: 1px solid #576241; border-radius: 13px; background: #292c21; color: var(--green);
+  svg { width: 33px; height: 33px; filter: drop-shadow(0 0 6px #a9f46945); }
+}
+.header-tools { display: flex; align-items: center; gap: 8px; }
+#{$in-game} .header-tools .help-button { display: none; }
+
+.footer {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 12px 0 16px;
+  border-top: 1px solid var(--line); color: var(--faint);
+  font: 600 .62rem/1.4 var(--mono); letter-spacing: .06em;
+  b { color: var(--green); }
+}
+
+@media (max-width: $bp-phone) {
+  .masthead { padding-bottom: 12px; }
+  .brand small { font-size: .52rem; letter-spacing: .07em; white-space: nowrap; }
+}
+@media (max-width: $bp-tiny) {
+  .brand small { display: none; }
+  .brand { gap: 6px; }
+  .brand-mark { width: 36px; height: 36px; }
+  .header-tools { gap: 5px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  #{$in-game} {
+    .masthead { padding-bottom: 4px; }
+    .brand-mark { width: 30px; height: 30px; svg { width: 23px; height: 23px; } }
+    .brand small, .footer { display: none; }
+    .icon-button { width: 33px; height: 33px; }
+  }
+}
+
+// Page shell (the App wraps everything in <div class="shell"><main>…</main></div>), kept here with its breakpoints.
+.shell {
+  position: relative; max-width: 1300px; margin: 0 auto;
+  padding: max(21px, env(safe-area-inset-top)) max(38px, env(safe-area-inset-right)) max(0px, env(safe-area-inset-bottom)) max(38px, env(safe-area-inset-left));
+  display: flex; flex-direction: column; min-height: 100svh;
+  > main { flex: 1; }
+}
+@media (max-width: $bp-tablet) {
+  .shell { padding-inline: max(23px, env(safe-area-inset-left)) max(23px, env(safe-area-inset-right)); }
+}
+@media (max-width: $bp-phone) {
+  .shell { padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); padding-top: max(10px, env(safe-area-inset-top)); }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  #{$in-game} .shell { padding-top: max(4px, env(safe-area-inset-top)); }
+}
