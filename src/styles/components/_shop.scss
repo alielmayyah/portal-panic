@@ -147,9 +147,12 @@ $coin: #ffcc33;
   b { color: $coin; font: 800 .86rem/1 var(--mono); }
 }
 
-// In-run HUD: held weapon and run coins.
+// In-run HUD: run coins and held weapon.
+.runner-coins strong {
+  display: flex; align-items: center; gap: 5px; color: $coin; font-family: var(--mono);
+  i { width: 9px; height: 9px; border-radius: 50%; background: $coin; box-shadow: 0 0 6px $coin; }
+}
 .runner-weapon {
-  display: inline-flex; align-items: center; gap: 5px; color: #e6dbe9; font: 700 .66rem/1.2 var(--mono);
-  i { width: 8px; height: 8px; border-radius: 50%; background: var(--weapon, var(--green)); box-shadow: 0 0 6px var(--weapon, var(--green)); }
-  b { color: $coin; font-weight: 800; }
+  display: inline-flex; align-items: center; gap: 5px; color: #e6dbe9; font: 700 .66rem/1.2 var(--mono); white-space: nowrap;
+  i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--weapon, var(--green)); box-shadow: 0 0 6px var(--weapon, var(--green)); }
 }

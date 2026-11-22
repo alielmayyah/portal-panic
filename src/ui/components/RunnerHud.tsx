@@ -56,6 +56,12 @@ function RunnerPanel({ runner, cheats }: { runner: HudRunner; cheats: boolean })
           </span>
         </span>
       </span>
+      {runner.coins !== undefined && (
+        <span className="runner-coins">
+          <small>COINS</small>
+          <strong><i aria-hidden="true" />{runner.coins}</strong>
+        </span>
+      )}
       {runner.weapon && (
         <span
           className="runner-weapon"
@@ -64,7 +70,6 @@ function RunnerPanel({ runner, cheats }: { runner: HudRunner; cheats: boolean })
         >
           <i aria-hidden="true" />
           {runner.weapon}{runner.charge ? ` ${Math.round(runner.charge * 100)}%` : ''}
-          {runner.coins ? <b>· {runner.coins}c</b> : null}
         </span>
       )}
       <span className="runner-gadget" hidden={!runner.gadget}>
