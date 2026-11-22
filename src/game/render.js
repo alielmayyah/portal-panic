@@ -1,11 +1,14 @@
 import { W, H, GROUND_Y, GADGETS } from './world.js';
-import { PLATFORM_DEPTH } from './levels.js';
+import { LEVELS, PLATFORM_DEPTH } from './levels.js';
 
 const TAU = Math.PI * 2;
 const INK = '#21162c';
 const GREEN = '#caff57';
 const mod = (n, m) => ((n % m) + m) % m;
 const rand = (n) => mod(Math.sin(n * 72.319 + 4.112) * 41578.5, 1);
+// shadowBlur is in device pixels and ignores the transform, so glows are scaled by
+// device pixels per world unit (capped to keep large blurs cheap in fullscreen).
+let px = 1;
 
 function shape(c, fill, points, stroke, width = 2) {
   c.beginPath();
@@ -86,7 +89,7 @@ function ridges(c, w, p, viewWidth) {
       const i = j + Math.floor(scroll / span);
       const x = j * span - mod(scroll, span);
       const h = height * (.46 + rand(i + span) * .54);
-      if (w.level === 2) {
+      if (p.skyline === 'towers') {
         shape(c, color, [[x - 16, base], [x - 9, base - h * .6], [x + 22, base - h * .6], [x + 22, base - h], [x + span * .42, base - h], [x + span * .42, base - h * .72], [x + span * .69, base - h * .72], [x + span * .75, base], [x + span + 30, base]]);
         c.fillStyle = p.rim;
         c.globalAlpha = .24;
@@ -118,7 +121,7 @@ function ridges(c, w, p, viewWidth) {
 
 function ground(c, w, p, viewWidth, visible) {
   const glow = c.createLinearGradient(0, GROUND_Y, 0, H);
-  glow.addColorStop(0, '#361634'); glow.addColorStop(1, w.level === 1 ? '#d56070' : '#55315f');
+  glow.addColorStop(0, '#361634'); glow.addColorStop(1, p.glow);
   c.fillStyle = glow;
   c.fillRect(w.camera - 12, GROUND_Y, viewWidth + 24, H - GROUND_Y + 12);
   for (const { x, y, w: width, type, travel, baseY } of w.surfaces) {
@@ -133,7 +136,9 @@ function ground(c, w, p, viewWidth, visible) {
     const bottom = y === GROUND_Y ? H + 12 : y + PLATFORM_DEPTH;
     shape(c, p.dirt, [[x, y], [x + width, y], [x + width - 5, bottom], [x + 5, bottom]], p.far);
     c.globalAlpha = .36;
-    for (let mark = Math.max(x + 12, w.camera - 16); mark < Math.min(x + width - 8, w.camera + viewWidth + 16); mark += 32) {
+    // Marks sit at fixed world positions so they scroll with the ground and keep their pebbles.
+    const first = x + 12 + Math.max(0, Math.ceil((w.camera - 16 - x - 12) / 32)) * 32;
+    for (let mark = first; mark < Math.min(x + width - 8, w.camera + viewWidth + 16); mark += 32) {
       line(c, p.rim, 1.5, [[mark, y + 6], [mark + 10, y + 6]]);
       if (y === GROUND_Y) oval(c, mark, y + 14 + rand(mark) * 45, 3 + rand(mark + 4) * 6, 1.1, p.rim);
     }
@@ -171,7 +176,7 @@ function portal(c, x, y, t, scale = 1) {
 
 function crystal(c, o, x) {
   const b = o.w / o.shards;
-  const heights = o.shards === 3 ? [.75, 1, .82] : [1, .78];
+  const heights = [1, .78];
   const colors = o.tint > .55 ? ['#fb7aa6', '#a03f78', '#ffc2c8'] : ['#a683fb', '#5a4eab', '#d5c8ff'];
   for (let i = 0; i < o.shards; i++) {
     const a = x + i * b, h = o.h * heights[i], y = o.y + o.h;
@@ -233,7 +238,7 @@ function cell(c, o, x, t) {
   const y = o.y + Math.sin(t * .08 + o.phase) * 3;
   c.save();
   c.translate(x, y); c.rotate(.39);
-  c.shadowColor = GREEN; c.shadowBlur = 12;
+  c.shadowColor = GREEN; c.shadowBlur = 12 * px;
   shape(c, '#aaf650', [[-7, -7], [4, -10], [8, -6], [7, 7], [-4, 10], [-8, 6]], '#42652b', 1.8);
   c.shadowBlur = 0;
   shape(c, '#efffb7', [[1, -6], [-4, 1], [0, 1], [-1, 7], [5, -2], [1, -2]]);
@@ -257,7 +262,7 @@ function gadget(c, item, t) {
   const x = item.wx, y = item.y + Math.sin(t * .09 + item.phase) * 3;
   const color = GADGETS[item.kind].color;
   c.save();
-  c.shadowColor = color; c.shadowBlur = 13;
+  c.shadowColor = color; c.shadowBlur = 13 * px;
   oval(c, x, y, 14, 14, '#302440', color);
   c.shadowBlur = 0;
   if (item.kind === 'shield') {
@@ -286,7 +291,7 @@ function pulse(c, x, y, dir, hostile = false) {
   c.translate(x, y);
   c.scale(dir, 1);
   c.shadowColor = glow;
-  c.shadowBlur = 9;
+  c.shadowBlur = 9 * px;
   shape(c, glow, [[-19, 0], [-6, -4], [7, -2], [11, 0], [7, 2], [-6, 4]]);
   c.shadowBlur = 0;
   line(c, core, 2, [[-7, 0], [6, 0]]);
@@ -385,13 +390,20 @@ export function drawRunner(c, r, { shadow = true, armed = false } = {}) {
   c.restore();
 }
 
-export function render(ctx, w, { scale = 1, offsetY = 0, viewWidth = W, preview = false, reduceMotion = false } = {}) {
+export function render(ctx, w, { scale = 1, offsetY = 0, viewWidth = W, preview = false, reduceMotion = false, pixelRatio = Math.min(globalThis.devicePixelRatio || 1, 2) } = {}) {
   const t = reduceMotion ? 0 : w.tick;
   const p = w.dimension;
   const viewTop = Math.min(0, -offsetY / scale);
+  // Canvas text is in world units; keep labels at least 10 CSS px tall on small screens.
+  const minText = 10 * pixelRatio / scale;
+  px = Math.min(scale, 3);
   ctx.setTransform(scale, 0, 0, scale, 0, offsetY);
   ctx.save();
-  if (!reduceMotion && w.shake > 0) ctx.translate(Math.sin(t * 2.1) * w.shake * .4, Math.cos(t) * w.shake * .23);
+  if (!reduceMotion && w.shake > 0) {
+    // The world tick stops after a solo death, so the shake phase needs a clock that keeps running.
+    const st = w.fxTick ?? performance.now() * .06;
+    ctx.translate(Math.sin(st * 2.1) * w.shake * .4, Math.cos(st) * w.shake * .23);
+  }
   sky(ctx, w, p, viewWidth, viewTop);
   ridges(ctx, w, p, viewWidth);
   ctx.translate(-w.camera, 0);
@@ -401,9 +413,9 @@ export function render(ctx, w, { scale = 1, offsetY = 0, viewWidth = W, preview 
     portal(ctx, exit, 244, t, .9 + w.riftFlash * .08);
     if (!preview) {
       ctx.textAlign = 'center';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = `bold ${Math.max(13, minText)}px monospace`;
       ctx.fillStyle = '#e6ffac';
-      ctx.fillText(w.level === 2 || w.versus ? 'FINISH PORTAL' : 'NEXT DIMENSION', exit, 137);
+      ctx.fillText(w.level === LEVELS.length - 1 || w.versus ? 'FINISH PORTAL' : 'NEXT DIMENSION', exit, 137);
     }
   }
   ground(ctx, w, p, viewWidth, visible);
@@ -445,12 +457,17 @@ export function render(ctx, w, { scale = 1, offsetY = 0, viewWidth = W, preview 
     drawRunner(ctx, r, { armed: true });
     ctx.globalAlpha = 1;
     if (w.versus && !preview) {
-      const x = Math.max(w.camera + 24, Math.min(w.camera + viewWidth - 24, r.x + 22));
-      const y = r.x < w.camera || r.x > w.camera + viewWidth ? 67 : Math.max(20, r.feet - 86);
+      const size = Math.max(11, minText);
+      ctx.font = `bold ${size}px monospace`;
+      const label = r.x + 22 < w.camera + 24 ? '◀ ' + r.name : r.name;
+      const half = ctx.measureText(label).width / 2 + 4;
+      const x = Math.max(w.camera + half, Math.min(w.camera + viewWidth - half, r.x + 22));
+      // Racers start side by side; stack the second tag only while they are close together.
+      const lift = w.runners.some((o) => o !== r && o.alive && Math.abs(o.x - r.x) < 60) ? w.runners.indexOf(r) * 13 : 0;
+      const y = r.x < w.camera || r.x > w.camera + viewWidth ? 67 + lift : Math.max(size + 4 + lift, r.feet - 86 - lift);
       ctx.fillStyle = r.color;
       ctx.textAlign = 'center';
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText(x > r.x + 24 ? '◀ ' + r.name : r.name, x, y);
+      ctx.fillText(label, x, y);
     }
   }
   for (const chunk of w.debris) {

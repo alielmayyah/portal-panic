@@ -9,10 +9,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least privilege by default; only the deploy job gets Pages/OIDC rights.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,8 +28,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - if: github.event_name != 'pull_request'
-        uses: actions/configure-pages@v6
+      - name: Standalone build is up to date
+        run: git diff --exit-code --stat -- portal-panic.html || { echo "::error file=portal-panic.html::portal-panic.html is stale. Run npm run build and commit it."; exit 1; }
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
@@ -40,9 +39,13 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/configure-pages@v6
       - id: deployment
         uses: actions/deploy-pages@v5

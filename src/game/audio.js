@@ -1,8 +1,5 @@
-const BASS = [
-  [36, 36, 43, 36, 39, 39, 46, 43],
-  [33, 33, 40, 45, 36, 36, 43, 40],
-  [42, 42, 49, 54, 38, 38, 45, 49],
-];
+// Each level supplies its own { bass, beat } track; this covers callers or levels that don't.
+const FALLBACK_TRACK = { bass: [36, 36, 43, 36, 39, 39, 46, 43], beat: .272 };
 const LEAD = [12, 19, 24, 15, 19, 22, 17, 26];
 const frequency = (note) => 440 * 2 ** ((note - 69) / 12);
 
@@ -14,26 +11,59 @@ export class Sound {
     this.beat = 0;
     this.nextBeat = 0;
     this.playing = false;
+    this.queueUntil = 0;
   }
 
   unlock() {
-    if (!this.ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      this.ctx = new AC();
-      this.master = this.ctx.createGain();
-      this.music = this.ctx.createGain();
-      this.music.gain.value = this.playing ? .44 : 0;
-      this.master.gain.value = this.enabled ? .72 : 0;
-      this.music.connect(this.master);
-      this.master.connect(this.ctx.destination);
+    // Muted players get no context; toggleSound() calls unlock() again after unmuting.
+    if (!this.enabled || this.failed) return;
+    try {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        const ctx = new AC();
+        const master = ctx.createGain();
+        const music = ctx.createGain();
+        music.gain.value = this.playing ? .44 : 0;
+        master.gain.value = this.enabled ? .72 : 0;
+        music.connect(master);
+        master.connect(ctx.destination);
+        this.ctx = ctx;
+        this.master = master;
+        this.music = music;
+      }
+      clearTimeout(this.sleepTimer);
+      // A pending suspend() from muting still reports 'running', so resume after it too.
+      if (this.ctx.state !== 'running' || this.sleeping) {
+        this.sleeping = false;
+        // Sounds from the unlocking gesture may play once the context starts; see audible().
+        this.queueUntil = performance.now() + 500;
+        this.ctx.resume().catch(() => {});
+      }
+    } catch {
+      // Audio is unavailable here (blocked device, context limit); play silently from now on.
+      this.failed = true;
+      this.ctx = this.master = this.music = null;
     }
-    if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
   }
 
   setEnabled(enabled) {
     this.enabled = enabled;
-    if (this.master) this.master.gain.setTargetAtTime(enabled ? .72 : 0, this.ctx.currentTime, .018);
+    if (!this.master) return;
+    this.master.gain.setTargetAtTime(enabled ? .72 : 0, this.ctx.currentTime, .018);
+    clearTimeout(this.sleepTimer);
+    // Let the fade finish, then stop the silent render thread to save battery.
+    if (!enabled) this.sleepTimer = setTimeout(() => {
+      if (this.enabled || !this.ctx) return;
+      this.sleeping = true;
+      this.ctx.suspend().catch(() => {});
+    }, 150);
+  }
+
+  // Effects requested while the context is stopped would all start in the same sample when it
+  // resumes, so they are only queued briefly after a resume request.
+  audible() {
+    return this.enabled && this.ctx && (this.ctx.state === 'running' || performance.now() < this.queueUntil);
   }
 
   playMusic(playing) {
@@ -45,11 +75,11 @@ export class Sound {
     if (this.music) this.music.gain.setTargetAtTime(playing ? .44 : 0, this.ctx.currentTime, .045);
   }
 
-  updateMusic(level) {
+  updateMusic(track) {
     if (!this.playing || !this.enabled || this.ctx?.state !== 'running') return;
+    const { bass: pattern = FALLBACK_TRACK.bass, beat: step = FALLBACK_TRACK.beat } = track ?? {};
     const now = this.ctx.currentTime;
     if (this.nextBeat < now - .1) this.nextBeat = now;
-    const pattern = BASS[level];
     while (this.nextBeat < now + .08) {
       const beat = this.beat++;
       const note = pattern[Math.floor(beat / 2) % pattern.length];
@@ -60,12 +90,12 @@ export class Sound {
         this.tone(frequency(pattern[0] + 12 + LEAD[beat % LEAD.length]), .16, { type: 'sine', vol: .065, delay, music: true });
       }
       if (beat % 2 === 1) this.noise(.07, .055, { delay, music: true, filter: 4800 });
-      this.nextBeat += [.272, .25, .224][level];
+      this.nextBeat += step;
     }
   }
 
   tone(freq, dur, { type = 'square', vol = 0.05, slide = 0, delay = 0, music = false } = {}) {
-    if (!this.enabled || !this.ctx) return;
+    if (!this.audible()) return;
     const t0 = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -81,7 +111,7 @@ export class Sound {
   }
 
   noise(dur, vol = 0.08, { delay = 0, music = false, filter = 640 } = {}) {
-    if (!this.enabled || !this.ctx) return;
+    if (!this.audible()) return;
     if (!this.noiseBuffer) {
       this.noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);

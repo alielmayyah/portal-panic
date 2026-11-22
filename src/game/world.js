@@ -6,7 +6,7 @@ export const H = 420;
 export const STEP_MS = 1000 / 60;
 export const PLAYER_COLORS = ['#97edf0', '#ffdb71'];
 export const MAX_MISSILES = 5;
-export const BOOTS_TICKS = 600;
+const BOOTS_TICKS = 600;
 export const ACTIONS = ['left', 'right', 'jump', 'duck', 'fire', 'missile'];
 export const GADGETS = {
   shield: { name: 'Phase shield', color: '#70f1fa' },
@@ -28,7 +28,7 @@ export function createRunner({ name = 'Rick', color = PLAYER_COLORS[0], characte
     name, color, character, x, startX: x, feet: GROUND_Y, vx: 0, vy: 0, facing: 1,
     airTicks: 0, grounded: true, ducking: false, alive: true, coyote: 0, jumpBuffer: 0,
     prevJump: false, extraJump: false, input: {}, anim: 0, maxX: x, bonus: 0,
-    orbs: 0, missiles: 3, blasterCooldown: 0, missileCooldown: 0, blasterPose: 0, kills: 0, walls: 0,
+    missiles: 3, blasterCooldown: 0, missileCooldown: 0, blasterPose: 0, kills: 0, walls: 0,
     shield: false, boots: 0, checkpoint: 0, respawnAt: 0, invuln: 0, lagTicks: 0,
   };
 }
@@ -77,12 +77,12 @@ export class World {
       r.boots = 0;
       r.missiles = Math.max(3, r.missiles);
     }
-    const { bonus, orbs, kills, missiles, walls } = this.runner;
-    this.levelStart = { bonus, orbs, kills, missiles, walls };
+    const { bonus, kills, missiles, walls } = this.runner;
+    this.levelStart = { bonus, kills, missiles, walls };
   }
 
   nextLevel() {
-    this.runner.bonus += this.score - this.runner.bonus + 100;
+    this.runner.bonus = this.score + 100;
     this.loadLevel(this.level + 1);
   }
 
@@ -111,7 +111,6 @@ export class World {
     this.enemyShots.length = 0;
     this.events.length = 0;
     this.respawn(this.runner);
-    this.camera = Math.max(0, this.runner.x - 130);
   }
 
   step() {
@@ -233,7 +232,7 @@ export class World {
     if (r.boots) r.boots--;
     if (r.invuln) r.invuln--;
     if (r.grounded && r.surface?.travel) r.feet += r.surface.dy;
-    if (r.grounded) r.coyote = 6;
+    if (r.grounded) { r.coyote = 6; r.extraJump = r.boots > 0; }
     else if (r.coyote) r.coyote--;
     const jumpPressed = jump && !r.prevJump;
     r.prevJump = jump;
@@ -281,7 +280,9 @@ export class World {
   }
 
   moveRunner(r, duck) {
-    let x = bounds(r.x + r.vx, 12, this.dimension.width - 52);
+    const wanted = r.x + r.vx;
+    let x = bounds(wanted, 12, this.dimension.width - 52);
+    if (x !== wanted) r.vx = 0;
     const top = r.feet - (duck && r.grounded ? 30 : 60);
     const rightEdge = duck && r.grounded ? 45 : 40;
     let blockingWall = null;
@@ -307,13 +308,16 @@ export class World {
     const headHeight = r.character === 'rick' ? 72 : 62;
     let stop = -Infinity;
     for (const platform of this.platforms) {
-      if (r.x + 33 <= platform.x || r.x + 9 >= platform.x + platform.w) continue;
+      // Grazing a ledge corner (12px or less of the 24px head) does not bump, so late coyote jumps survive.
+      if (Math.min(r.x + 33, platform.x + platform.w) - Math.max(r.x + 9, platform.x) <= 12) continue;
       const underside = platform.y + PLATFORM_DEPTH;
+      // A descending deck has already moved this tick; test against where its underside was.
+      const sweptUnderside = Math.min(underside, underside - platform.dy);
       const headBefore = previousFeet - headHeight;
       const headAfter = r.feet - headHeight;
       // Some low ledges allow walking underneath with reduced clearance.
-      const startingBelow = r.airTicks === 1 && previousFeet > underside + 26;
-      if (headAfter < underside && (headBefore >= underside - .5 || startingBelow)) {
+      const startingBelow = r.airTicks === 1 && previousFeet > sweptUnderside + 26;
+      if (headAfter < underside && (headBefore >= sweptUnderside - .5 || startingBelow)) {
         stop = Math.max(stop, underside + headHeight);
       }
     }
@@ -451,7 +455,7 @@ export class World {
       pickup.taken = true;
       if (pickup.kind === 'shield') r.shield = true;
       else if (pickup.kind === 'boots') { r.boots = BOOTS_TICKS; r.extraJump = true; }
-      else { r.bonus += 25; r.orbs++; r.missiles = Math.min(MAX_MISSILES, r.missiles + 1); }
+      else { r.bonus += 25; r.missiles = Math.min(MAX_MISSILES, r.missiles + 1); }
       this.events.push({ type: GADGETS[pickup.kind] ? pickup.kind : 'orb', runner: r });
       this.burst(pickup.wx, pickup.y, 17, GADGETS[pickup.kind]?.color ?? '#bdff58', 3);
     }
@@ -479,6 +483,8 @@ export class World {
   }
 
   updateEffects() {
+    // Effects clock for the screen shake; it keeps running while the world is frozen.
+    this.fxTick = (this.fxTick || 0) + 1;
     for (const chunk of this.debris) {
       chunk.x += chunk.vx;
       chunk.y += chunk.vy;
