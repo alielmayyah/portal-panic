@@ -1,0 +1,14 @@
+{
+  "name": "portal-panic",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/standalone.mjs",
+    "start": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  }
+}
