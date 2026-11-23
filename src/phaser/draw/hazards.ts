@@ -1,107 +1,125 @@
-// Hazards: crystals (new hot, spiky look), drones (with charge telegraph), walls
-// (cracks and HP pips), slimes, and the generic hit flash. World coordinates.
 import type { ObstacleView } from './view';
 import { crystalShards } from '../../core/world';
-import { type G, type Pt, INK, GREEN, dashed, glowOval, line, oval, rand, rect, shape, strokeRect, withAlpha } from './prims';
+import { type G, INK, dashed, glowOval, line, oval, rect, shape, withAlpha } from './prims';
+import { ink, stroke } from './creatureInk';
 
-const CRYSTAL_HOT = { body: '#ff3b2f', shade: '#8f1022', edge: '#ffb39b', glow: '#ff4a2a' } as const;
-const CRYSTAL_WARM = { body: '#ff6a1c', shade: '#9a2a10', edge: '#ffd58a', glow: '#ff7a2a' } as const;
-
-/**
- * Crystal spikes. The outer outline of each shard is exactly the hitbox polygon from
- * crystalShards() in core/world.ts, so what kills you is what you see. The extra spikes
- * and facets are drawn inside that outline. `t` drives the glow pulse and tip flicker;
- * pass 0 under reduced motion.
- */
+/** The faceted hull is also the collision polygon. */
 export function drawCrystal(g: G, o: ObstacleView, x: number, t: number): void {
-  const shards = o.shards ?? 1;
-  const b = o.w / shards;
-  const pal = (o.tint ?? 0) > .55 ? CRYSTAL_HOT : CRYSTAL_WARM;
+  const hot = (o.tint ?? 0) > .55;
   const base = o.y + o.h;
-  const pulse = t ? .5 + .5 * Math.sin(t * .11 + o.wx * .05) : .5;
-
-  // Pulsing heat halo and a scorched glow on the ground.
-  glowOval(g, x + o.w / 2, base - o.h * .42, o.w * .5 + 2 + pulse * 3, o.h * .5 + 2 + pulse * 3, pal.glow, 10 + pulse * 4, .32 + pulse * .2, 5);
-  withAlpha(.45 + pulse * .25, () => oval(g, x + o.w / 2, base, o.w * .56, 3, '#ff9a4a'));
-
-  crystalShards(o, x).forEach((poly, i) => {
-    // Hull: [base-left, left shoulder, main tip, right shoulder, base-right].
-    const a = poly[0][0];
-    const h = base - poly[2][1];
-    shape(g, pal.body, poly, INK, 2);
-    // Inner secondary spikes (inside the hull) in the darker shade.
-    shape(g, pal.shade, [[a + b * .08, base - 1], [a + b * .2, base - h * .5], [a + b * .4, base - 1]]);
-    shape(g, pal.shade, [[a + b * .66, base - 1], [a + b * .85, base - h * .58], [a + b * .95, base - 1]]);
-    // Right facet of the main spike.
-    shape(g, pal.shade, [[a + b * .55, base - h + 3], [a + b * .86, base - h * .6], [a + b * .7, base - 1], [a + b * .56, base - 1]]);
-    line(g, INK, 1, [[a + b * .55, base - h + 3], [a + b * .56, base - 1]]);
-    line(g, pal.edge, 1.4, [[a + b * .25, base - h * .45], [a + b * .5, base - h * .9]]);
-    // White-hot tips on the hull vertices that flicker.
-    [poly[2], poly[1], poly[3]].forEach(([tx, ty], k) => {
-      const on = rand(i * 7 + k * 3 + o.wx + Math.floor(t / 5)) > .4;
-      const s = k ? 1.5 : 2.1;
-      withAlpha(on ? 1 : .35, () => {
-        if (on) withAlpha(.35, () => oval(g, tx, ty + s, s * 2.2, s * 2.2, '#fff3c4'));
-        shape(g, '#ffffff', [[tx, ty + .5], [tx + s * .6, ty + s * 1.3], [tx, ty + s * 2.4], [tx - s * .6, ty + s * 1.3]]);
-      });
-    });
+  const pulse = .5 + .5 * Math.sin(t * .07 + x);
+  oval(g, x + o.w / 2, base, o.w * .54, 2.6, '#25162b8c');
+  crystalShards(o, x).forEach((hull) => {
+    const [left, shoulder, tip, rightShoulder, right] = hull;
+    const width = right[0] - left[0], height = base - tip[1];
+    const ridge = left[0] + width * .43, waist = base - height * .42;
+    shape(g, hot ? '#d32e50' : '#f55035', hull, INK, 2);
+    shape(g, hot ? '#ff6782' : '#ff9670', [shoulder, tip, [ridge, waist]]);
+    shape(g, hot ? '#771945' : '#a03338', [tip, rightShoulder, right, [ridge, base - 1], [ridge, waist]]);
+    shape(g, '#ffe0a8', [shoulder, tip, [ridge + 1, base - height * .63]]);
+    shape(g, hot ? '#f33e66' : '#f96944', [[ridge, waist], rightShoulder, [ridge + 2, waist + height * .19], [ridge, base - 1]]);
+    line(g, '#ffe8bf', 1.15, [[left[0] + width * .17, base - height * .30], [ridge, waist], [ridge + width * .10, waist - 1]]);
+    line(g, '#50203c', 1.2, [[ridge, waist + 2], [ridge, base - 1]]);
+    withAlpha(.4 + .4 * pulse, () => line(g, '#fff6d4', 1.4, [[tip[0], tip[1] + 2], [tip[0] - 2, tip[1] + 8]]));
   });
 }
 
 export function drawDrone(g: G, o: ObstacleView, x: number, t: number): void {
-  const y = o.y + o.h / 2;
-  const cx = x + o.w / 2;
-  const aim = o.aim ?? 0;
-  if (o.charge) {
-    dashed(g, '#ff8196ad', o.charge < 12 ? 2.5 : 1.3, cx, y, cx + aim * (190 - o.charge * 2.7), y, 7, 7);
-    oval(g, cx, y, 30 + o.charge * .15, 19, '#ff58871c', '#ff8196a6', 1.7);
+  const y = o.y + o.h / 2, cx = x + o.w / 2;
+  const aim = o.aim || -1;
+  if (o.charge) dashed(g, '#ff8099c4', o.charge < 12 ? 2.3 : 1.2, cx, y, cx + aim * (190 - o.charge * 2.7), y, 7, 6);
+  g.save();
+  g.translateCanvas(cx, y);
+  g.scaleCanvas(-aim, 1);
+  // A tiny pilot leans over the controls inside the glass bubble.
+  ink(g, '#315461', '-13 0/-14 -12 -4 -14/8 -17 14 -7/16 -3 14 0');
+  ink(g, '#83dcd4', '-12 -1/-12 -11 -4 -12/7 -15 12 -6/6 -9 -1 -5/-6 -1 -12 -1', 0);
+  ink(g, '#83ad65', '-6 0/-8 -5 -4 -8/-1 -11 3 -8/7 -8 8 -5/7 -2 5 1', 1.1);
+  oval(g, -3.7, -6, 2.8, 2.25, '#ffeeb7', INK, .9);
+  oval(g, -4.7, -6, .95, 1.1, INK);
+  stroke(g, '#f4fff1', 1.45, '-10 -6/-8 -11 -4 -11');
+  // Bell and vented skirt cast one solid shadow beneath the enamel body.
+  ink(g, '#46616b', '-16 4/-12 12 -5 12/7 14 16 7/17 2');
+  ink(g, '#f99457', '-9 9/-5 13 3 12/7 12 10 9', 1.15);
+  const flutter = Math.sin(t * .29);
+  oval(g, 0, 13 + flutter, 4.9, 1.45, '#ffdfa8');
+  ink(g, o.volley ? '#e97971' : '#e8a572', '-23 2/-20 -4 -10 -5/6 -7 18 -3/24 -1 23 3/15 7 0 8/-16 9 -23 4');
+  ink(g, '#a84b57', '-23 3/-6 6 9 2/19 0 23 0/23 4 19 5/4 10 -14 7', 0);
+  stroke(g, '#ffe6bd', 1.3, '-18 -1/-10 -4 0 -4');
+  for (const offset of [-8, 0, 8]) oval(g, offset, 3 - offset * .055, 1.4, 1.1, o.charge ? '#fff7a9' : '#a8f0d9', INK, .65);
+  if (o.volley) {
+    ink(g, '#475463', '-22 1/-16 0/-13 3/-15 6/-22 6', 1.25);
+    oval(g, -21.5, 3.5, 2, 2.7, o.charge ? '#ffe994' : '#fa836f', INK, 1);
+    if (o.charge) glowOval(g, -22, 3, 2, 2, '#ffba7b', 3.5, .6, 3);
   }
-  oval(g, cx, y + 7, 14, 7, '#b95c81', INK);
-  oval(g, cx, y, 23, 8, o.volley ? '#cc6789' : '#e385a3', INK);
-  oval(g, cx + 4, y - 5, 13, 9, '#9af2dc', INK);
-  oval(g, cx + 7, y - 8, 4, 2, '#e4fff2');
-  for (const offset of [-15, -5, 9]) oval(g, cx + offset, y + 3, 2, 1.6, o.charge ? '#fff4ad' : o.volley ? '#ffad88' : GREEN);
-  if (o.volley) oval(g, cx + (aim || -1) * 20, y + Math.sin(t * .25) * .55, 4, 3, o.charge ? '#fff1b1' : '#ff9aab', INK, 1.25);
+  g.restore();
 }
 
 export function drawWall(g: G, o: ObstacleView): void {
-  const x = o.wx;
-  const right = x + o.w;
-  const y = o.y;
-  rect(g, o.flash ? '#8d674f' : '#403246', x, y, o.w, o.h);
-  strokeRect(g, '#f0bb71', 2, x + 1, y + 1, o.w - 2, o.h - 1);
-  for (let row = 0; row < 7; row++) {
-    const yy = y + 11 + row * 34;
-    shape(g, row % 2 ? '#73566a' : '#5c485d', [[x + 4, yy], [right - 4, yy], [right - 5, yy + 28], [x + 5, yy + 28]], INK, 1.2);
-    oval(g, x + 8, yy + 4, 1.7, 1.7, '#ffd078');
-    oval(g, right - 8, yy + 24, 1.7, 1.7, '#ffd078');
+  const { w, h } = o;
+  g.save();
+  g.translateCanvas(o.wx, o.y);
+  rect(g, INK, 0, 0, w, h);
+  rect(g, '#586175', 2, 3, w - 4, h - 4);
+  rect(g, '#2c3549', w - 8, 3, 6, h - 4);
+  rect(g, '#afc3c1', 3, 5, 1.7, h - 8);
+  const count = 4, panel = (h - 18) / count;
+  for (let i = 0; i < count; i++) {
+    const y = 12 + i * panel;
+    shape(g, o.flash ? '#c88b71' : '#71818b', [[6,y], [w-12,y], [w-8,y+6], [w-8,y+panel-8], [w-14,y+panel-3], [6,y+panel-3]], INK, 1.5);
+    shape(g, '#445463', [[7,y+panel-16], [w-9,y+panel-30], [w-9,y+panel-8], [w-14,y+panel-4], [7,y+panel-4]]);
+    line(g, '#c1cfbe', 1.2, [[8,y+3], [w-14,y+3]]);
+    for (let vent = 0; vent < 3; vent++) line(g, '#263547', 1.8, [[10+vent*4,y+13], [13+vent*4,y+10]]);
+    oval(g, w-13, y+panel-11, 1.6, 1.6, '#b4bcac', INK, .8);
   }
-  const center = x + o.w / 2;
-  const damage = o.maxHp - o.hp;
-  const cracks: Pt[] = [[center - 3, y + 36], [center + 6, y + 78], [center - 9, y + 127], [center + 5, y + 167], [center - 7, y + 219], [center + 3, y + o.h]];
-  line(g, '#251a2f', 4, cracks);
-  line(g, damage ? '#ffd185' : '#ee9c68', damage ? 1.4 + damage * .3 : 1.2, cracks);
-  for (let i = 0; i < damage && i + 1 < cracks.length; i++) {
-    const [cx, cy] = cracks[i + 1];
-    line(g, '#ffdb92', 1.4, [[cx, cy], [cx + (i % 2 ? 13 : -12), cy + 12], [x + (i % 2 ? o.w - 3 : 4), cy + 22]]);
+  // The orange mechanical latch and teeth tell the player where shots break the door.
+  const mid = h * .50;
+  shape(g, '#f7ad61', [[2,mid-15],[w-10,mid-15],[w-4,mid-9],[w-4,mid+13],[8,mid+13],[2,mid+8]], INK, 1.8);
+  for (const n of [0, 1, 2]) shape(g, '#413646', [[5+8*n,mid+4],[9+8*n,mid+4],[14+8*n,mid+11],[10+8*n,mid+11]]);
+  rect(g, '#282533', 7, mid-9, w-18, 8);
+  const step = (w - 20) / o.maxHp;
+  for (let i = 0; i < o.hp; i++) rect(g, '#fff0ac', 8 + i*step, mid-7, step-1, 4);
+  const cracks = Math.min(4, o.maxHp - o.hp);
+  for (let i = 0; i < cracks; i++) {
+    const y = 12 + ((i+2)%4) * panel;
+    const points = [[5,y+8],[19,y+19],[14,y+23],[24,y+36],[w-8,y+40]] as const;
+    line(g, INK, 3.5, points);
+    line(g, '#ffa470', 1.15, points);
   }
-  for (let i = 0; i < o.maxHp; i++) rect(g, i < o.hp ? '#ffd98b' : '#291b31', center - o.maxHp * 2.5 + i * 5, y + 5, 4, 3);
+  g.restore();
 }
 
 export function drawSlime(g: G, o: ObstacleView, t: number): void {
-  const x = o.wx + o.w / 2;
-  const y = o.y + o.h;
-  const bounce = Math.sin(t * .15 + (o.phase ?? 0)) * 3;
-  oval(g, x, y - 7, 24, 7, '#61518b', INK);
-  oval(g, x, y - 19 + bounce, 21, 19 - bounce, '#ab6cdb', INK);
-  for (const eye of [x - 7, x + 7]) {
-    oval(g, eye, y - 24 + bounce, 6, 7, '#faffc8', INK, 1.4);
-    oval(g, eye - 1.7, y - 24 + bounce, 2, 3.1, INK);
-  }
-  line(g, INK, 2, [[x - 7, y - 13], [x, y - 9], [x + 7, y - 13]]);
+  const wave = Math.sin(t * .12 + (o.phase ?? 0));
+  g.save();
+  g.translateCanvas(o.wx + o.w / 2, o.y + o.h);
+  oval(g, 0, -.7, 23, 2.3, '#1916286b');
+  g.scaleCanvas(1 + wave * .025, 1 - wave * .035);
+  // A shore slug with a glassy mantle, a tall left eyestalk and a scalloped foot.
+  ink(g, '#ac83c6', '-23 -5/-25 -9 -19 -13/-17 -26 -12 -29/-16 -36 -10 -40/-4 -44 0 -37/1 -34 -1 -31/5 -34 9 -30/15 -34 19 -29/21 -25 18 -22/16 -19 18 -15/20 -9 25 -8/27 -4 22 -3/19 -2 16 -4/10 2 5 -2/-1 2 -6 -2/-14 2 -16 -2/-23 -1 -23 -5');
+  ink(g, '#765485', '-22 -9/-20 -13 -16 -15/-13 -7 -8 -7/-3 -10 1 -9/7 -10 12 -14/16 -18 18 -20/16 -13 22 -9/25 -8 24 -6/22 -3 16 -5/11 -1 6 -3/0 0 -5 -4/-12 0 -16 -4/-22 -1 -22 -9', 0);
+  ink(g, '#daa5da', '-18 -15/-14 -26 -9 -28/-5 -30 -1 -26/-7 -25 -10 -21/-14 -15 -18 -15', 0);
+  oval(g, -8.8, -33.3, 6.25, 6.9, '#f6edbc', INK, 1.6, -.22);
+  oval(g, -11.3, -32.8, 2.1, 3.15, '#272434', undefined, 0, -.12);
+  oval(g, -11.9, -34, .7, .8, '#fff7d5');
+  oval(g, 11.8, -26.1, 5.5, 5.3, '#f6edbc', INK, 1.5, -.24);
+  oval(g, 9.6, -25.5, 1.8, 2.65, '#272434');
+  stroke(g, '#62436d', 1.4, '-16 -32/-15 -40 -9 -40');
+  ink(g, '#3d273d', '-14 -17/-7 -15 0 -18/6 -20 11 -18/7 -11 0 -11/-8 -10 -14 -17', 1.25);
+  ink(g, '#fff0cc', '-9 -15/-4 -15/-6 -11', .7);
+  ink(g, '#fff0cc', '4 -17/8 -18/5 -13', .7);
+  stroke(g, '#e4b2e5', 1.3, '-8 -6/-4 -7 -2 -6');
+  for (const [x,y] of [[-18,-11],[2,-25],[16,-10]]) oval(g, x, y, 1.2, .85, '#7c538a');
+  g.restore();
 }
 
-/** Brief white flash over a non-wall obstacle that was hit. */
+/** Short impact streaks stay readable over pale skin and dark armor. */
 export function drawHitFlash(g: G, o: ObstacleView): void {
-  oval(g, o.wx + o.w / 2, o.y + o.h / 2, o.w * .43, o.h * .38, '#fff2a73e', '#fff2a7ac', 1.4);
+  const x = o.wx + o.w / 2, y = o.y + o.h / 2;
+  withAlpha(.68, () => {
+    for (const s of [-1, 1]) {
+      line(g, '#fff4c7', 2, [[x+s*o.w*.3,y-o.h*.12], [x+s*o.w*.49,y-o.h*.22]]);
+      line(g, '#fff4c7', 1.45, [[x+s*o.w*.34,y+o.h*.15], [x+s*o.w*.47,y+o.h*.2]]);
+    }
+  });
 }

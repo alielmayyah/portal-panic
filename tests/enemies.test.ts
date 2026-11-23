@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BOSS_NAMES, MONSTER_DEATHS, MONSTER_TYPES, OFFSCREEN, SWOOP_CLEARANCE, bossHud, makeMonster, portalSealed,
+  BOSS_CONTACT_DAMAGE, BOSS_NAMES, BOSS_STATS, MONSTER_DEATHS, MONSTER_TYPES, OFFSCREEN, SWOOP_CLEARANCE, bossHud, makeMonster, portalSealed,
 } from '../src/core/enemies';
 import { GROUND_Y, LEVELS } from '../src/core/levels';
 import type { HazardDef, LevelDef, MonsterType, Obstacle, Runner, WorldEvent } from '../src/core/types';
@@ -181,14 +181,15 @@ describe('boss', () => {
 
   it('exposes world.boss, seals the portal and wakes when a runner comes close', () => {
     const w = bossLevel();
-    expect(w.boss).toMatchObject({ name: BOSS_NAMES[1], hp: 48, maxHp: 48, phase: 1, active: false });
+    const hp = BOSS_STATS[1].hp;
+    expect(w.boss).toMatchObject({ name: BOSS_NAMES[1], hp, maxHp: hp, phase: 1, active: false });
     expect(portalSealed(w)).toBe(true);
     expect(bossHud(w)).toBeNull();
     w.runner.god = true;
     const events = run(w, 5, () => park(w.runner, 2500));
     expect(events.some((e) => e.type === 'boss-intro')).toBe(true);
     expect(w.boss!.active).toBe(true);
-    expect(bossHud(w)).toEqual({ name: BOSS_NAMES[1], hp: 48, maxHp: 48, phase: 1 });
+    expect(bossHud(w)).toEqual({ name: BOSS_NAMES[1], hp, maxHp: hp, phase: 1 });
   });
 
   it('a sealed portal cannot be entered', () => {
@@ -242,7 +243,7 @@ describe('boss', () => {
     const o = mob(w, 'boss');
     w.breakObstacle(o, w.runner, true);
     expect(o.broken).toBeFalsy();
-    expect(o.hp).toBe(o.maxHp - 3);
+    expect(o.hp).toBe(o.maxHp - BOSS_CONTACT_DAMAGE.shield);
   });
 });
 

@@ -1,9 +1,8 @@
-// Wave 2 monsters and bosses (src/core/enemies.ts): hopper, swooper, spitter, brute, splitter, boss,
-// their shots (goo, boss orbs), the boss HP bar and the portal seal. World coordinates.
 import type { EnemyShotView, ObstacleView } from './view';
-import { type G, INK, TAU, arc, dashed, glowOval, line, oval, rect, shape, strokeRect, withAlpha } from './prims';
+import { type G, INK, TAU, arc, dashed, glowOval, line, oval, rect, shape, withAlpha } from './prims';
+import { ink, stroke } from './creatureInk';
+import { drawBoss } from './creatureBosses';
 
-/** Read-only view of core MobState (structural). */
 export interface MobView {
   readonly kind: string;
   readonly state: string;
@@ -22,249 +21,198 @@ export interface MonsterView extends ObstacleView { readonly mob?: MobView }
 const MONSTER_KINDS = new Set(['hopper', 'swooper', 'spitter', 'brute', 'splitter', 'boss']);
 export const isMonsterView = (o: ObstacleView): boolean => MONSTER_KINDS.has(o.type);
 
-const eye = (g: G, x: number, y: number, r: number, look: number, angry = false) => {
-  oval(g, x, y, r, r * 1.1, '#fbffd8', INK, 1.3);
-  oval(g, x + look * r * .35, y + r * .1, r * .42, r * .55, INK);
-  if (angry) line(g, INK, 2, [[x - r * 1.1, y - r * 1.3], [x + r * 1.1, y - r * .7 * (look || 1)]]);
-};
-
-/** Draws one monster. `t` is the animation clock (0 under reduced motion). */
 export function drawMonster(g: G, o: ObstacleView, t: number): void {
   const m = (o as MonsterView).mob;
-  const blink = m && m.grace > 0 && t % 8 < 4 ? .5 : 1;
-  withAlpha(blink, () => {
+  if (o.type === 'boss') { drawBoss(g, o, m, t); return; }
+  g.save();
+  g.translateCanvas(o.wx + o.w / 2, o.y + o.h);
+  g.scaleCanvas(-(m?.dir || -1), 1);
+  const time = t ? t + (o.phase ?? 0) : 0;
+  withAlpha(m && m.grace > 0 && t % 8 < 4 ? .55 : 1, () => {
     switch (o.type) {
-      case 'hopper': drawHopper(g, o, m, t); break;
-      case 'swooper': drawSwooper(g, o, m, t); break;
-      case 'spitter': drawSpitter(g, o, m, t); break;
-      case 'brute': drawBrute(g, o, m, t); break;
-      case 'splitter': drawSplitter(g, o, m, t); break;
-      case 'boss': drawBoss(g, o, m, t); break;
+      case 'hopper': drawHopper(g, m, time); break;
+      case 'swooper': drawSwooper(g, m, time); break;
+      case 'spitter': drawSpitter(g, m, time); break;
+      case 'brute': drawBrute(g, o, m, time); break;
+      case 'splitter': drawSplitter(g, m, time); break;
     }
   });
+  g.restore();
 }
 
-function drawHopper(g: G, o: ObstacleView, m: MobView | undefined, t: number): void {
-  const x = o.wx + o.w / 2;
-  const base = o.y + o.h;
-  const dir = m?.dir ?? -1;
-  // Squash on landing, stretch in the air.
-  const squash = m?.air ? -.12 : m && m.land < 10 ? .22 * (1 - m.land / 10) : Math.sin(t * .2 + (o.phase ?? 0)) * .04;
-  const rx = o.w / 2 * (1 + squash);
-  const ry = o.h / 2 * (1 - squash);
-  oval(g, x, base + 1, o.w * .42, 3, '#00000044');
-  // Back legs.
-  for (const s of [-1, 1]) line(g, INK, 5, [[x + s * rx * .6, base - ry * .6], [x + s * rx * 1.05, base - (m?.air ? 10 : 2)], [x + s * rx * .7, base]], true);
-  for (const s of [-1, 1]) line(g, '#4ec25a', 3, [[x + s * rx * .6, base - ry * .6], [x + s * rx * 1.05, base - (m?.air ? 10 : 2)], [x + s * rx * .7, base]], true);
-  oval(g, x, base - ry, rx, ry, '#7cf07a', INK, 2);
-  oval(g, x, base - ry * .6, rx * .7, ry * .45, '#c9ffb0');
-  for (const s of [-1, 1]) eye(g, x + s * rx * .42 + dir * 2, base - ry * 1.75, 5.2, dir);
-  arc(g, INK, 2, x + dir * 3, base - ry * .95, rx * .45, ry * .25, .3, Math.PI - .3);
+function drawHopper(g: G, m: MobView | undefined, t: number): void {
+  const squash = m?.air ? -.08 : m && m.land < 10 ? .16 * (1 - m.land / 10) : Math.sin(t * .12) * .035;
+  g.scaleCanvas(1 + squash, 1 - squash);
+  // A shovel-jawed toad with a folded spring leg. The toes trail behind in flight.
+  ink(g, '#457d66', '-9 -12/-12 -6/-11 -4/-5 -3/-6 0/-16 0/-17 -3/-14 -14');
+  ink(g, '#77be79', '-18 -20/-15 -31 -6 -30/-3 -34 0 -34/1 -31/6 -33/8 -29/13 -29 17 -23/23 -17 17 -10/10 -4 -1 -5/-13 -5 -19 -12/-23 -18 -18 -20');
+  ink(g, '#539879', '-18 -13/-7 -11 -1 -15/6 -23 16 -22/20 -18 17 -12/10 -6 0 -6/-15 -5 -18 -13', 0);
+  ink(g, '#d2dc99', '-20 -16/-11 -13 -4 -17/1 -19 6 -17/2 -9 -8 -8/-17 -8 -20 -16', 1.35);
+  stroke(g, '#586b51', 1.1, '-16 -12/-12 -10 -8 -11');
+  oval(g, -9.4, -25.2, 6.6, 7.1, '#f5d988', INK, 1.65, .16);
+  oval(g, -11.2, -24.8, 3.6, 1.4, INK, undefined, 0, -.2);
+  ink(g, '#8acb83', '-16 -26/-15 -35 -8 -33/-3 -32 -2 -27/-9 -30 -16 -26', 1.25);
+  oval(g, -18, -19, 1.3, .9, INK);
+  ink(g, '#7fbd71', '3 -17/6 -25 13 -24/21 -23 18 -16/15 -12 8 -9/13 -7/9 -5/1 -8/-2 -11/5 -15');
+  stroke(g, '#c7db8f', 1.35, '6 -20/10 -24 14 -21');
+  g.save();
+  g.translateCanvas(8, -8);
+  if (m?.air) g.rotateCanvas(-.45);
+  ink(g, '#86c78c', '0 -1/7 0/11 4/14 4/13 6/16 7/7 7/3 5/-2 4');
+  g.restore();
+  oval(g, 3, -25, 1.35, 1, '#466b5f');
 }
 
-function drawSwooper(g: G, o: ObstacleView, m: MobView | undefined, t: number): void {
-  const x = o.wx + o.w / 2;
-  const y = o.y + o.h / 2;
+function drawSwooper(g: G, m: MobView | undefined, t: number): void {
   const diving = m?.state === 'dive';
-  const dir = m?.dir ?? -1;
-  const flap = diving ? -.2 : Math.sin(t * .45 + (o.phase ?? 0));
-  const span = diving ? o.w * .45 : o.w * .75;
-  for (const s of [-1, 1]) {
-    const tipY = y - 10 * flap;
-    shape(g, '#6b4bc2', [
-      [x + s * 6, y - 4], [x + s * span * .55, tipY - 8], [x + s * span, tipY], [x + s * span * .78, y + 4],
-      [x + s * span * .5, y + 1], [x + s * span * .3, y + 7], [x + s * 6, y + 5],
-    ], INK, 1.6);
-  }
-  oval(g, x, y, 11, 10, '#b48cff', INK, 2);
-  for (const s of [-1, 1]) shape(g, '#b48cff', [[x + s * 4, y - 8], [x + s * 8, y - 16], [x + s * 9, y - 6]], INK, 1.4);
-  if (diving) glowOval(g, x + dir * 3, y - 2, 4, 3, '#ff5c8a', 4, .5, 3);
-  for (const s of [-1, 1]) oval(g, x + s * 4 + dir * 2, y - 2, 2.2, 2.4, diving ? '#ff5c8a' : '#fff6b0');
-  shape(g, '#ffffff', [[x - 3, y + 5], [x - 1.5, y + 9], [x, y + 5], [x + 1.5, y + 9], [x + 3, y + 5]]);
+  const flap = Math.sin(t * .29);
+  g.translateCanvas(0, -13);
+  if (diving) g.rotateCanvas(-.16);
+  // Asymmetric, scalloped moth wings give the banking sprite a three-quarter view.
+  g.save();
+  g.rotateCanvas(diving ? -.36 : flap * .18);
+  ink(g, '#8f73b8', '-3 -1/-13 -13 -27 -13/-23 -8 -24 -4/-16 -7 -14 0/-10 -3 -7 5/0 4');
+  stroke(g, '#d1add3', 1.15, '-24 -11/-15 -10 -9 -4');
+  g.restore();
+  g.save();
+  g.rotateCanvas(diving ? .28 : -flap * .25);
+  ink(g, '#af82cd', '1 0/8 -11 18 -14/25 -16 30 -15/26 -12 24 -5/19 -7 16 0/11 -2 8 6/5 3 2 6');
+  ink(g, '#614f85', '3 3/13 -8 23 -12/19 -7 16 -2/11 -3 8 4/6 3 4 5', 0);
+  stroke(g, '#e4c5ed', 1.15, '5 -2/13 -10 19 -11');
+  g.restore();
+  ink(g, '#6d547d', '-5 -7/-7 -14/-3 -12/2 -8/7 -11/10 -13/9 -6/5 -3');
+  ink(g, '#e0b7cc', '-9 -5/-5 -10 2 -8/10 -7 10 0/9 5 4 7/2 13/-2 8/-6 10/-7 5/-12 2');
+  ink(g, '#afa6c9', '0 7/5 3 6 -4/11 -1 8 4/5 6 4 7/2 11', 0);
+  oval(g, -2, -.9, 6.15, 5.45, diving ? '#ff906d' : '#ffe398', INK, 1.55, -.2);
+  oval(g, -3.4, -1, 1.65, 3.2, INK);
+  stroke(g, '#65485f', 1.15, '-9 -4/-4 -9 2 -6');
+  if (diving) line(g, '#f0c0da', 1.25, [[12,2],[22,0]]);
 }
 
-function drawSpitter(g: G, o: ObstacleView, m: MobView | undefined, t: number): void {
-  const x = o.wx + o.w / 2;
-  const base = o.y + o.h;
-  const dir = m?.dir ?? -1;
+function drawSpitter(g: G, m: MobView | undefined, t: number): void {
   const wind = m?.state === 'wind' ? Math.min(1, m.t / 26) : 0;
-  // Rooted pot.
-  shape(g, '#4a5a2a', [[x - 18, base], [x - 14, base - 16], [x + 14, base - 16], [x + 18, base]], INK, 2);
-  rect(g, '#6c7d36', x - 15, base - 19, 30, 5);
-  line(g, INK, 6, [[x, base - 18], [x - dir * 3, base - 30], [x, o.y + 20]]);
-  line(g, '#8fa83e', 3.5, [[x, base - 18], [x - dir * 3, base - 30], [x, o.y + 20]]);
-  // Bulb head that swells before it spits.
-  const r = 15 + wind * 4 + Math.sin(t * .1 + (o.phase ?? 0)) * .8;
-  const hx = x + dir * 2;
-  const hy = o.y + 15;
-  if (wind) glowOval(g, hx, hy, r, r * .9, '#e8ff5a', 6, .25 + wind * .3, 3);
-  oval(g, hx, hy, r, r * .88, '#d6e64a', INK, 2);
-  for (let i = 0; i < 3; i++) oval(g, hx - dir * (4 + i * 4), hy - 6 + i * 4, 1.8, 1.6, '#97a524');
-  // Mouth facing the target.
-  oval(g, hx + dir * r * .62, hy + 2, 5 + wind * 3, 4 + wind * 3, '#3b1730', INK, 1.4);
-  oval(g, hx + dir * r * .62, hy + 3, 2.5 + wind * 2, 1.6 + wind, '#b8f04a');
-  eye(g, hx - dir * 1, hy - 7, 3.6, dir, wind > 0);
+  // Bile pitcher growing out of a knotted, coral-shaped root.
+  ink(g, '#4c8c79', '-17 0/-16 -5 -11 -5/-12 -10 -19 -12/-10 -12 -3 -8/-4 -18 -1 -25/2 -28 8 -27/9 -23 5 -17/2 -13 4 -9/8 -15 16 -16/10 -12 11 -7/18 -10 21 -6/13 -5 18 -1/9 -2 6 -1/0 -4 -6 -1/-10 -2 -17 0');
+  stroke(g, '#a4cf8f', 1.4, '1 -10/-3 -12 3 -24');
+  g.save();
+  g.translateCanvas(3, -29);
+  g.rotateCanvas(-.055 + Math.sin(t * .09) * .04 - wind * .09);
+  g.scaleCanvas(1 + wind * .08, 1 + wind * .08);
+  ink(g, '#9cb95a', '-14 -12/-7 -15 -3 -18/-4 -14/-1 -15/6 -21 13 -18/9 -15 8 -12/15 -13 19 -9/14 -8 13 -4/19 -3 19 1/13 0 10 3/8 12 -2 13/-10 12 -12 3/-11 -2 -16 -4');
+  ink(g, '#d3cf71', '-16 -10/-5 -13 -1 -8/6 -3 5 3/5 8 -1 10/-9 11 -11 4/-11 -2 -16 -4', 0);
+  ink(g, '#708e55', '4 9/10 5 10 -2/9 -7 6 -8/13 -6 14 -8/11 -4 12 -2/16 -1 17 0/11 -1 9 5/6 12 -2 12', 0);
+  // Rolled trumpet lip points toward the projectile's launch position.
+  oval(g, -14.8, -7.3, 5.6, 8.2, '#f79d82', INK, 1.75, -.52);
+  oval(g, -15.6, -7.7, 3.15, 5.6, '#4b3840', INK, .9, -.52);
+  oval(g, -14.8, -6, 1.8 + wind, 2.2 + wind, '#c3e777', undefined, 0, -.5);
+  oval(g, -.5, -8.2, 4.1, 4.45, '#fff0be', INK, 1.3);
+  oval(g, -1.9, -8, 1.35, 2.25, INK);
+  stroke(g, '#655742', 1.25, '-5 -10/-2 -15 2 -12');
+  for (const [x,y] of [[2,3],[6,0],[0,6]]) oval(g, x,y,1.1,1.5,'#888d50');
+  if (wind) glowOval(g, -16, -7, 4, 4, '#e6ff8e', 5, wind * .7, 3);
+  g.restore();
 }
 
 function drawBrute(g: G, o: ObstacleView, m: MobView | undefined, t: number): void {
-  const x = o.wx + o.w / 2;
-  const base = o.y + o.h;
-  const dir = m?.dir ?? -1;
-  const charging = m?.state === 'charge';
-  const turning = m?.state === 'turn';
-  const step = Math.sin(t * (charging ? .4 : .2) + (o.phase ?? 0));
-  oval(g, x, base + 1, o.w * .48, 3.5, '#00000044');
-  // Legs.
-  for (const s of [-1, 1]) rect(g, '#7a4a2c', x + s * 12 - 6, base - 16 + (s * step > 0 ? -2 : 0), 12, 16);
-  // Body.
-  shape(g, '#c06c38', [[x - 24, base - 14], [x - 27, o.y + 22], [x - 14, o.y + 6], [x + 14, o.y + 6], [x + 27, o.y + 22], [x + 24, base - 14]], INK, 2.2);
-  oval(g, x - dir * 6, o.y + 34, 12, 14, '#e0894a');
-  // Horns.
-  for (const s of [-1, 1]) shape(g, '#f6e6c4', [[x + s * 10, o.y + 9], [x + s * 18, o.y - 4], [x + s * 15, o.y + 11]], INK, 1.4);
-  eye(g, x + dir * 8, o.y + 20, 4, dir, true);
-  // Front armor plate (the side it faces): shots from this side bounce off.
-  const px = x + dir * 24;
-  const plate: [number, number][] = [[px, o.y + 8], [px + dir * 9, o.y + 18], [px + dir * 10, base - 12], [px, base - 4], [px - dir * 4, base - 30]];
-  shape(g, '#8d97a8', plate, INK, 2.2);
-  line(g, '#e6ecf5', 1.6, [[px + dir * 3, o.y + 14], [px + dir * 6, base - 16]]);
-  for (const k of [0, 1, 2]) oval(g, px + dir * 5, o.y + 22 + k * 12, 1.6, 1.6, '#3a3f4a');
-  if (o.flash && o.flash < 4) glowOval(g, px + dir * 6, o.y + o.h / 2, 6, o.h * .35, '#fff2b0', 4, .6, 3);
-  if (turning) {
-    // Slow turn telegraph: a little dust and a "huff".
-    withAlpha(.6, () => oval(g, x - dir * 26, base - 4, 6 + (m?.t ?? 0) * .1, 3, '#d8c3a8'));
+  const charge = m?.state === 'charge';
+  const stride = m?.state === 'turn' ? 0 : Math.sin(t * (charge ? .31 : .14));
+  for (const side of [-1,1]) {
+    g.save();
+    g.translateCanvas(side * 11, -12);
+    g.rotateCanvas(side * stride * .23);
+    ink(g, side < 0 ? '#9b604c' : '#c67b57', '-6 -5/4 -6/6 2/3 7/7 9/7 12/-7 12/-9 10/-6 5');
+    g.restore();
   }
-  if (charging) for (const k of [0, 1, 2]) line(g, '#ffd9a8', 1.4, [[x - dir * (30 + k * 6), o.y + 20 + k * 12], [x - dir * (44 + k * 6), o.y + 20 + k * 12]]);
+  g.translateCanvas(0, -Math.abs(stride) * 1.7);
+  // A terracotta pack-beast with an ivory beak under the shell and a full riot shield.
+  ink(g, '#c27957', '-20 -40/-19 -52 -9 -58/4 -68 16 -58/28 -51 26 -35/25 -21 18 -12/3 -7 -9 -13/-20 -18 -20 -40');
+  ink(g, '#93574e', '-16 -28/-6 -31 1 -26/12 -29 22 -40/25 -29 19 -17/12 -10 3 -12/-12 -10 -16 -22', 0);
+  ink(g, '#dc8e61', '-13 -45/-17 -57 -3 -62/10 -68 18 -61/28 -58 28 -43/24 -48 20 -48/17 -42 13 -39/10 -46 6 -45/3 -39 -3 -39/-4 -45 -9 -42');
+  stroke(g, '#ffcb91', 1.5, '-9 -55/-2 -62 6 -62');
+  stroke(g, '#91604f', 1.25, '9 -59/16 -56 17 -48');
+  ink(g, '#e8c895', '-18 -44/-12 -49 -3 -46/2 -44 0 -37/-6 -31 -15 -30/-22 -31 -23 -34/-18 -34 -17 -37/-24 -35 -24 -39');
+  oval(g, -10, -42, 4.2, 3.8, '#ffdb81', INK, 1.2);
+  oval(g, -11.3, -42, 1.45, 2.2, INK);
+  ink(g, '#bd7459', '-19 -46/-14 -51 -5 -49/-2 -48 -2 -45/-11 -46 -18 -42', 1.45);
+  ink(g, '#d58c62', '8 -39/15 -44 21 -36/26 -29 21 -23/16 -20 12 -25/10 -32 6 -31');
+  stroke(g, '#875047', 1.3, '15 -37/19 -34 19 -30');
+  // Raised in the direction from which bullets are deflected.
+  ink(g, o.flash && o.flash < 4 ? '#fff0a4' : '#789c9d', '-28 -46/-25 -52 -19 -51/-12 -48 -11 -41/-9 -27 -14 -13/-19 -7 -24 -6/-31 -17 -30 -31');
+  ink(g, '#466876', '-26 -44/-23 -48 -20 -47/-14 -44 -14 -37/-13 -23 -19 -12/-21 -11 -23 -10/-21 -24 -23 -35', .95);
+  stroke(g, '#c3d8bc', 1.6, '-27 -38/-28 -45 -24 -48');
+  stroke(g, '#f9b575', 2.0, '-26 -31/-21 -36 -18 -30/-16 -24 -21 -22/-25 -20 -24 -26/-23 -28 -21 -27');
+  if (m?.state === 'turn') {
+    withAlpha(.55, () => oval(g, -32, -37, 2.6 + m.t * .05, 1.7, '#f4d6af'));
+  }
+  if (charge) for (const k of [0,1,2]) line(g, '#ffe2ad', 1.5, [[24+k*2,-46+k*11],[34+k*4,-47+k*11]]);
 }
 
-function drawSplitter(g: G, o: ObstacleView, m: MobView | undefined, t: number): void {
-  const x = o.wx + o.w / 2;
-  const base = o.y + o.h;
-  const small = Boolean(m?.small);
-  const wob = Math.sin(t * (small ? .3 : .13) + (o.phase ?? 0));
-  const rx = o.w / 2 * (1 + wob * .06);
-  const ry = o.h / 2 * (1 - wob * .06);
-  oval(g, x, base + 1, o.w * .44, 3, '#00000044');
-  oval(g, x, base - ry, rx, ry, small ? '#ff9ccc' : '#ff7ab8', INK, 2);
-  if (!small) {
-    // Seam where it will split, and two faces.
-    line(g, '#b03d78', 2, [[x, o.y + 3], [x + 3, o.y + o.h * .35], [x - 2, o.y + o.h * .65], [x, base - 2]]);
-    for (const s of [-1, 1]) {
-      eye(g, x + s * rx * .45, base - ry * 1.25, 4.4, s);
-      arc(g, INK, 1.8, x + s * rx * .45, base - ry * .7, 5, 3, .3, Math.PI - .3);
-    }
-  } else {
-    eye(g, x + (m?.dir ?? 1) * 3, base - ry * 1.2, 3.6, m?.dir ?? 1);
-  }
-  withAlpha(.5, () => oval(g, x - rx * .4, base - ry * 1.45, rx * .22, ry * .16, '#ffffff'));
-}
-
-const BOSS_SKIN = [
-  { body: '#7a2a5e', belly: '#c4579a', plate: '#3c1236', glow: '#ff4f9a', eye: '#ffe36b' },
-  { body: '#3a1f6e', belly: '#7a4bd6', plate: '#1a0d36', glow: '#ff4f6d', eye: '#9fffe8' },
-] as const;
-
-function drawBoss(g: G, o: ObstacleView, m: MobView | undefined, t: number): void {
-  const final = m?.variant === 1;
-  const skin = BOSS_SKIN[final ? 1 : 0];
-  const dir = m?.dir ?? -1;
-  const state = m?.state ?? 'sleep';
-  const jitter = state === 'charge' && t ? Math.sin(t * 1.7) * 2.5 : 0;
-  const x = o.wx + o.w / 2 + jitter;
-  const base = o.y + o.h;
-  const top = o.y;
-  const phase = m?.phase ?? 1;
-  const breath = Math.sin(t * .06) * 2;
-  const rage = state === 'phase' || phase === 3;
-  oval(g, x, base + 2, o.w * .55, 5, '#00000055');
-  glowOval(g, x, top + o.h * .5, o.w * .5, o.h * .5, skin.glow, 10 + phase * 3, rage ? .4 : .22, 4);
-  // Legs.
-  for (const s of [-1, 1]) shape(g, skin.plate, [[x + s * o.w * .18, base - 26], [x + s * o.w * .42, base - 8], [x + s * o.w * .4, base], [x + s * o.w * .14, base]], INK, 2);
-  // Body.
-  const bw = o.w * .5;
-  shape(g, skin.body, [
-    [x - bw, base - 12], [x - bw - 6, top + o.h * .45], [x - bw * .7, top + 14 - breath], [x, top - breath],
-    [x + bw * .7, top + 14 - breath], [x + bw + 6, top + o.h * .45], [x + bw, base - 12],
-  ], INK, 2.6);
-  oval(g, x - dir * 6, top + o.h * .62, bw * .62, o.h * .26, skin.belly);
-  for (let i = 0; i < 4; i++) line(g, skin.plate, 2, [[x - dir * 6 - bw * .5, top + o.h * (.5 + i * .08)], [x - dir * 6 + bw * .5, top + o.h * (.5 + i * .08)]]);
-  // Crown spikes (one more per phase).
-  const spikes = 2 + phase;
-  for (let i = 0; i < spikes; i++) {
-    const sx = x - bw * .6 + (bw * 1.2) * (i / Math.max(1, spikes - 1));
-    shape(g, final ? '#9fffe8' : '#ffd36b', [[sx - 6, top + 10 - breath], [sx, top - 14 - breath - (i % 2) * 6], [sx + 6, top + 10 - breath]], INK, 1.6);
-  }
-  // Eyes: closed while asleep.
-  const ey = top + o.h * .3;
-  for (const s of [-1, 1]) {
-    const ex = x + dir * 12 + s * 16;
-    if (state === 'sleep') line(g, INK, 3, [[ex - 7, ey], [ex + 7, ey]]);
-    else {
-      glowOval(g, ex, ey, 7, 6, skin.eye, 4, rage ? .6 : .3, 3);
-      oval(g, ex, ey, 7, 6, skin.eye, INK, 1.6);
-      oval(g, ex + dir * 2, ey, 2.4, 3.6, INK);
-    }
-  }
-  // Mouth: opens for a volley.
-  const open = state === 'volley' ? Math.min(1, (m?.t ?? 0) / 30) : state === 'summon' ? .7 : .15;
-  const mx = x + dir * bw * .55;
-  oval(g, mx, top + o.h * .48, 12, 3 + open * 10, '#2a0b1e', INK, 2);
-  if (open > .3) for (const k of [-1, 0, 1]) shape(g, '#ffffff', [[mx + k * 6 - 2, top + o.h * .48 - open * 8], [mx + k * 6, top + o.h * .48 - open * 3], [mx + k * 6 + 2, top + o.h * .48 - open * 8]]);
-  if (state === 'volley' && (m?.t ?? 0) < 30) glowOval(g, mx + dir * 6, top + o.h * .48, 5, 5, skin.glow, 6, .6, 3);
-  if (state === 'charge') dashed(g, '#ff8196ad', 2, x + dir * bw, base - 20, x + dir * (bw + 160), base - 20, 9, 7);
-  if (state === 'dash') for (const k of [0, 1, 2, 3]) line(g, '#ffd9e6', 2, [[x - dir * (bw + 8 + k * 8), top + 20 + k * 22], [x - dir * (bw + 40 + k * 8), top + 20 + k * 22]]);
-  // Invulnerability flash.
-  if (m && (m.invuln > 6 || state === 'phase') && t % 8 < 4) withAlpha(.45, () => oval(g, x, top + o.h * .5, o.w * .55, o.h * .52, '#ffffff'));
-  if (state !== 'sleep') drawBossBar(g, o, x, final);
-}
-
-/** Small HP bar above the boss (the HUD shows the big one). */
-function drawBossBar(g: G, o: ObstacleView, x: number, final: boolean): void {
-  const w = Math.max(90, o.w * 1.1);
-  const y = o.y - 30;
-  rect(g, INK, x - w / 2 - 2, y - 2, w + 4, 9);
-  rect(g, '#3b1a2a', x - w / 2, y, w, 5);
-  rect(g, final ? '#ff4f6d' : '#ff7ab8', x - w / 2, y, w * Math.max(0, o.hp / o.maxHp), 5);
-  for (const k of [1, 2]) rect(g, INK, x - w / 2 + w * k / 3 - .5, y, 1, 5);
-  strokeRect(g, '#ffd3e0', 1, x - w / 2 - 1, y - 1, w + 2, 7);
-}
-
-/** Goo blobs (spitter) and boss orbs. Plain drone shots are drawn by drawPulse. */
-export function drawMonsterShot(g: G, s: EnemyShotView, t: number): void {
-  if (s.style === 'goo') {
-    const vy = s.vy ?? 0;
-    const tilt = Math.atan2(vy, s.vx);
-    glowOval(g, s.x, s.y, 6, 5, '#d6e64a', 4, .35, 3);
-    oval(g, s.x, s.y, 7.5, 5.5, '#b8e03a', INK, 1.6, tilt);
-    oval(g, s.x - 1.5, s.y - 1.5, 2, 1.4, '#f5ffc2');
-    oval(g, s.x - Math.cos(tilt) * 9, s.y - Math.sin(tilt) * 9, 2.4, 2.4, '#b8e03a');
+function drawSplitter(g: G, m: MobView | undefined, t: number): void {
+  const small = m?.small;
+  const wob = Math.sin(t * (small ? .19 : .11));
+  g.scaleCanvas((small ? .56 : 1) * (1 + wob * .035), (small ? .56 : 1) * (1 - wob * .045));
+  // The juvenile keeps the parent's gummy lobes, eye and pigment.
+  if (small) {
+    ink(g, '#f09cb0', '-22 -5/-23 -11 -16 -18/-17 -28 -9 -34/-1 -40 9 -33/14 -30 14 -19/14 -12 22 -7/26 -2 19 -1/13 1 9 -3/0 2 -5 -2/-17 2 -22 -5');
+    oval(g, -2, -24, 8.2, 8.7, '#ffeab8', INK, 1.9);
+    oval(g, -4, -24, 2.8, 4.4, INK);
+    stroke(g, INK, 1.8, '-12 -12/-5 -7 3 -12');
     return;
   }
-  const r = 7 + Math.sin(t * .4 + s.x * .05) * 1;
-  glowOval(g, s.x, s.y, r, r, '#ff4f6d', 6, .45, 4);
-  oval(g, s.x, s.y, r, r, '#ff4f9a', INK, 1.6);
-  oval(g, s.x, s.y, r * .45, r * .45, '#fff0f6');
-  line(g, '#ff9ab8', 2, [[s.x - Math.sign(s.vx) * r, s.y], [s.x - Math.sign(s.vx) * (r + 14), s.y]]);
+  ink(g, '#e98ba4', '-25 -7/-28 -13 -21 -20/-25 -34 -15 -41/-5 -48 1 -39/7 -45 16 -40/26 -35 21 -24/20 -20 24 -16/32 -8 25 -4/19 -1 13 -4/9 1 1 -2/-7 1 -12 -3/-21 0 -25 -7');
+  ink(g, '#b56083', '-24 -13/-17 -6 -9 -9/-3 -13 1 -12/6 -6 11 -8/18 -10 22 -18/22 -15 25 -13/29 -7 23 -5/16 -3 13 -6/9 -1 2 -4/-4 -1 -12 -5/-22 -1 -24 -9', 0);
+  stroke(g, '#8c4d74', 1.8, '0 -38/4 -31 0 -24/-3 -19 1 -14/6 -9 1 -4');
+  for (const side of [-1,1]) {
+    g.save();
+    g.scaleCanvas(side,1);
+    oval(g, 11, -29, 7.55, 8.2, '#ffefc0', INK, 1.65, -.25);
+    oval(g, 13, -28.7, 2.2, 3.8, INK);
+    stroke(g, '#ffbece', 1.55, '7 -39/13 -42 17 -37');
+    ink(g, '#713d5a', '5 -16/10 -14 18 -19/15 -12 10 -12/7 -12 5 -16', 1.1);
+    ink(g, '#fff0c7', '12 -16/15 -17/13 -13', .65);
+    g.restore();
+  }
 }
 
-/** Red lattice over the exit portal while a boss lives. */
+export function drawMonsterShot(g: G, s: EnemyShotView, t: number): void {
+  g.save();
+  g.translateCanvas(s.x, s.y);
+  g.rotateCanvas(Math.atan2(s.vy ?? 0, s.vx));
+  if (s.style === 'goo') {
+    ink(g, '#b9d65e', '-10 -2/-6 -2 -3 -5/3 -9 7 -4/11 1 5 5/1 8 -4 4/-6 1 -10 2');
+    oval(g, -13, 1, 2.15, 1.7, '#d1e583', INK, 1);
+    stroke(g, '#f1f9b6', 1.25, '-1 -4/2 -6 5 -4');
+  } else {
+    const pulse = 1 + Math.sin(t * .28) * .06;
+    g.scaleCanvas(pulse, pulse);
+    glowOval(g, 0, 0, 6.2, 6.2, '#ff5e89', 6, .4, 3);
+    ink(g, '#fb7892', '-18 0/-9 -2 -6 -5/-2 -10 5 -6/11 -2 7 4/4 9 -3 6/-8 3 -12 3/-8 1');
+    oval(g, 1, 0, 4.2, 3.6, '#fff3bc', INK, 1);
+    oval(g, 2, 0, 1.2, 2.6, '#b24968');
+  }
+  g.restore();
+}
+
+/** An iris seal overlays the exit while the boss lives. */
 export function drawPortalSeal(g: G, x: number, y: number, t: number): void {
-  const pulse = t ? .5 + .5 * Math.sin(t * .08) : .5;
-  glowOval(g, x, y, 54, 104, '#ff3b5c', 10, .2 + pulse * .15, 4);
-  for (let i = -2; i <= 2; i++) {
-    line(g, INK, 6, [[x + i * 18, y - 96 + Math.abs(i) * 10], [x + i * 18, y + 96 - Math.abs(i) * 10]]);
-    line(g, '#ff5c7a', 3, [[x + i * 18, y - 96 + Math.abs(i) * 10], [x + i * 18, y + 96 - Math.abs(i) * 10]]);
+  const pulse = .5 + .5 * Math.sin(t * .08);
+  oval(g, x,y,44,93,'#351937a8','#e97188',2.2);
+  oval(g, x,y,38,84,null,'#ffb7a3',1);
+  for (const offset of [-1,0,1]) {
+    dashed(g,'#ff8199',1.6,x-32,y-34+offset*32,x+32,y+7+offset*32,5,3);
+    dashed(g,'#ff8199',1.6,x-32,y+7+offset*32,x+32,y-34+offset*32,5,3);
   }
-  for (const k of [-1, 0, 1]) line(g, '#ff9ab0', 2, [[x - 44, y + k * 50], [x + 44, y + k * 50]]);
-  for (let i = 0; i < 6; i++) {
-    const a = i / 6 * TAU + t * .02;
-    oval(g, x + Math.cos(a) * 46, y + Math.sin(a) * 90, 2.2, 2.2, '#ffe0e8');
+  for (let i=0; i<8; i++) {
+    const a = TAU*i/8;
+    oval(g,x+Math.cos(a)*42,y+Math.sin(a)*90,2.25,2.25,'#ffe8bb',INK,1);
   }
-  oval(g, x, y, 13, 13, '#2a0b1e', '#ff5c7a', 2.4);
-  rect(g, '#ff5c7a', x - 4, y - 2, 8, 9);
-  arc(g, '#ff5c7a', 2.4, x, y - 3, 5, 6, Math.PI, TAU);
+  glowOval(g,x,y,13,13,'#f26383',7,.2+pulse*.2,3);
+  shape(g,'#4b2d48',[[x,y-17],[x+13,y-9],[x+13,y+9],[x,y+17],[x-13,y+9],[x-13,y-9]],'#ffd0aa',1.8);
+  arc(g,'#ffcaac',2,x,y-2,4.1,5.5,Math.PI,TAU);
+  rect(g,'#ffac9b',x-5.8,y-2,11.6,8.5);
+  rect(g,INK,x-1,y+.7,2,3.6);
 }
 
-/** drawWorld hook: the portal seal (drawn right after the portal). */
 export function drawEnemyBackLayer(g: G, obstacles: readonly ObstacleView[], exit: number, portalY: number, t: number): void {
   if (obstacles.some((o) => o.type === 'boss' && !o.broken)) drawPortalSeal(g, exit, portalY, t);
 }

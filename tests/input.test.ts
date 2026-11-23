@@ -9,7 +9,7 @@ describe('versus key map', () => {
     expect(VERSUS_KEYS.ArrowDown).toEqual([1, 'duck']);
     expect(VERSUS_KEYS.ShiftRight).toEqual([1, 'fire']);
     expect(VERSUS_KEYS.Backslash).toEqual([1, 'missile']);
-    expect(VERSUS_KEYS.IntlBackslash).toEqual([1, 'missile']);
+    expect(VERSUS_KEYS.IntlBackslash).toBeUndefined();
   });
 
   it('no longer binds Enter or Slash, and leaves Left Shift free', () => {

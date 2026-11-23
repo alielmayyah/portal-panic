@@ -19,6 +19,7 @@ import type { DeathCause, Mode, Runner, WorldEvent, WorldEventType } from '../co
 import { GADGETS, GROUND_Y, H, MAX_MISSILES, PLAYER_COLORS, STEP_MS, World, createRunner, isDeathEvent } from '../core/world';
 import { type DustPuff, drawWorld, dustPuffFor, worldLabels } from './draw';
 import { pixelRatio, placeCamera, reducedMotion } from './viewport';
+import { createPanorama, preloadPanoramas, type Panorama } from './draw/sky';
 
 export const COUNTDOWN_MS: Readonly<Record<Mode, number>> = { solo: 1250, versus: 2450 };
 export const CROSSING_MS = 1250;
@@ -64,6 +65,9 @@ const EVENT_SOUNDS: Partial<Record<WorldEventType, EffectName>> = {
   // Boss fight (audio/boss.ts).
   ...BOSS_EVENT_SOUNDS,
 };
+
+/** Widest versus regroup gap, whatever the screen width (a phone at minimum zoom shows about 960). */
+const REGROUP_GAP_MAX = 900;
 
 /** Result titles per death cause (every cause has one; RESULT_FALLBACK covers anything unexpected). */
 const RESULT_TITLES: Readonly<Record<DeathCause, string>> = {
@@ -115,6 +119,7 @@ export class GameScene extends Phaser.Scene {
   private pendingStart: StartCommand | null = null;
   private ready = false;
   private bg!: Phaser.GameObjects.Graphics;
+  private panorama?: Panorama;
   private layer!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
@@ -141,7 +146,10 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  preload(): void { preloadPanoramas(this); }
+
   create(): void {
+    this.panorama = createPanorama(this);
     this.bg = this.add.graphics().setScrollFactor(0, 1).setDepth(0);
     this.layer = this.add.graphics().setDepth(1);
     this.overlay = this.add.graphics().setScrollFactor(0, 1).setDepth(3);
@@ -662,7 +670,8 @@ export class GameScene extends Phaser.Scene {
    */
   private setRegroupGap(world: World, gap: number): void {
     const target = world as World & { regroupGap?: number };
-    if ('regroupGap' in target) target.regroupGap = Math.max(480, Math.floor(gap));
+    // Capped so the catch-up rule (and so the death penalty) is the same on every monitor.
+    if ('regroupGap' in target) target.regroupGap = Math.max(480, Math.min(REGROUP_GAP_MAX, Math.floor(gap)));
   }
 
   private agePuffs(): void {
@@ -723,7 +732,7 @@ export class GameScene extends Phaser.Scene {
     placeCamera(this.cameras.main, scale, offsetY, world.camera - shakeX, shakeY);
     this.bg.x = shakeX;
     const viewTop = Math.min(0, -offsetY / scale);
-    drawWorld({ bg: this.bg, world: this.layer, overlay: this.overlay }, world, { viewWidth, viewTop, reduceMotion, puffs: this.puffs });
+    drawWorld({ panorama: this.panorama, bg: this.bg, world: this.layer, overlay: this.overlay }, world, { viewWidth, viewTop, reduceMotion, puffs: this.puffs });
     this.drawLabels(world, viewWidth, scale);
   }
 
@@ -750,6 +759,7 @@ export class GameScene extends Phaser.Scene {
 
   private clearLayers(): void {
     if (!this.ready) return;
+    this.panorama?.setVisible(false);
     this.bg.clear();
     this.layer.clear();
     this.overlay.clear();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type Phaser from 'phaser';
 import { LEVELS } from '../../core/levels';
 import { actions, type Pilot } from '../../core/store';
@@ -25,13 +25,14 @@ export function GarageScreen({ startRef }: GarageScreenProps) {
   const best = useStore((s) => s.best);
   const runs = useStore((s) => s.runs);
   const previewRef = useRef<HTMLDivElement>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // The preview game follows the selected level from the store and sleeps while scrolled off-screen
   // (createPreview owns its IntersectionObserver). Creation waits a tick so StrictMode's immediate
   // mount/unmount/mount does not boot and tear down a WebGL context for nothing.
   useEffect(() => {
     const parent = previewRef.current;
-    if (!parent) return;
+    if (!parent || !previewOpen) return;
     let game: Phaser.Game | null = null;
     const timer = window.setTimeout(() => { game = createPreview(parent); }, 0);
     return () => {
@@ -39,7 +40,7 @@ export function GarageScreen({ startRef }: GarageScreenProps) {
       game?.destroy(true);
       game = null;
     };
-  }, []);
+  }, [previewOpen]);
 
   const drawn = useRef(new WeakSet<HTMLCanvasElement>());
   const portraitRef = useCallback((id: Pilot, canvas: HTMLCanvasElement | null) => {
@@ -58,6 +59,7 @@ export function GarageScreen({ startRef }: GarageScreenProps) {
   };
   const onLevelSelect = (level: number) => {
     actions.selectLevel(mode, level);
+    setPreviewOpen(true);
     clickSound();
   };
 
@@ -72,6 +74,8 @@ export function GarageScreen({ startRef }: GarageScreenProps) {
       best={best}
       runs={runs}
       previewRef={previewRef}
+      previewOpen={previewOpen}
+      onPreviewToggle={() => setPreviewOpen((open) => !open)}
       portraitRef={portraitRef}
       startRef={startRef}
       onModeChange={onModeChange}

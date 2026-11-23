@@ -45,6 +45,14 @@ const BLASTER_RANGE = 320;
 const MISSILE_RANGE = 540;
 const START_X = 90;
 const RESPAWN_INVULN = 76;
+/** Invulnerability after a versus regroup warp (shorter than a respawn's). */
+const REGROUP_INVULN = 20;
+/** Head height above the feet for ceiling bumps, both characters. */
+const HEAD_HEIGHT = 62;
+/** Versus: ticks a downed racer waits before respawning. */
+export const VERSUS_RESPAWN_TICKS = 70;
+/** Versus: ticks the boss killer has the opened portal to themselves. */
+export const PORTAL_KILLER_LEAD = 120;
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -139,7 +147,7 @@ export class World {
   /** Set by any cheat (except UNLOCKALL). Survives loadLevel/retry. */
   cheatsUsed = false;
   /** Versus racers further apart than this are warped together; the scene raises it to what its zoomed-out camera can show. */
-  regroupGap = 480;
+  regroupGap = 900;
 
   level = 0;
   frozen = false;
@@ -281,7 +289,7 @@ export class World {
     stepEnemies(this);
     this.entrants.length = 0;
     const dim = this.dimension;
-    for (const r of this.runners) {
+    for (const r of this.order()) {
       if (!r.alive) {
         if (this.versus && this.tick >= r.respawnAt) this.respawn(r);
         continue;
@@ -294,7 +302,7 @@ export class World {
         r.checkpoint = dim.checkpoint;
         this.emit('checkpoint', r);
       }
-      if (Math.abs(r.x + 22 - dim.exit) < 28 && r.feet > GROUND_Y - 94 && r.feet <= GROUND_Y + 1 && !portalSealed(this)) this.entrants.push(r);
+      if (Math.abs(r.x + 22 - dim.exit) < 28 && r.feet > GROUND_Y - 94 && r.feet <= GROUND_Y + 1 && !portalSealed(this) && this.mayEnterPortal(r)) this.entrants.push(r);
     }
     if (this.entrants.length) {
       this.winner = this.entrants.length === 1 ? this.entrants[0]! : null;
@@ -304,6 +312,25 @@ export class World {
       return;
     }
     if (this.versus && this.runners.every((r) => r.alive)) this.keepRacersTogether();
+  }
+
+  /**
+   * Runner processing order. Versus alternates it every tick so neither racer wins every tie (pickups,
+   * sentry targets, photo finishes are still decided by the portal rule).
+   */
+  order(): Runner[] {
+    return this.versus && this.tick % 2 ? [...this.runners].reverse() : this.runners;
+  }
+
+  /**
+   * Versus: after a boss falls, only its killer may enter the portal for PORTAL_KILLER_LEAD ticks, so the
+   * other racer cannot camp the sealed portal. Reads boss.killer / boss.openedAt defensively (enemies.ts).
+   */
+  mayEnterPortal(r: Runner): boolean {
+    if (!this.versus || !this.boss) return true;
+    const { killer, openedAt } = this.boss as BossInfo & { killer?: Runner | null; openedAt?: number };
+    if (!killer || killer === r || openedAt === undefined) return true;
+    return this.tick >= openedAt + PORTAL_KILLER_LEAD;
   }
 
   moveScenery(): void {
@@ -355,7 +382,7 @@ export class World {
       let gap = 385;
       let target: Runner | null = null;
       const lift = sentry.lift ?? 0;
-      for (const runner of this.runners) {
+      for (const runner of this.order()) {
         const tx = runner.x + 22;
         const distance = Math.abs(tx - x);
         if (!runner.alive || distance < 105 || distance >= gap || this.wallInLine(x, tx, y)) continue;
@@ -365,7 +392,7 @@ export class World {
         sentry.aimY = bounds(runner.feet - 44 - sentry.h / 2, sentry.baseY - lift, sentry.baseY + lift);
       }
       if (target) {
-        sentry.charge = 42 - this.level * 3;
+        sentry.charge = Math.max(30, 42 - this.level * 3); // windup never under 30 ticks (was 21 on level 8)
         this.emit('enemy-charge', target);
         if (!this.droneWarned) {
           this.droneWarned = true;
@@ -387,11 +414,13 @@ export class World {
     lead.lagTicks = 0;
     if (lead.x - back.x < this.regroupGap) { back.lagTicks = 0; return; }
     if (++back.lagTicks < 75) return;
-    // Put a separated racer on safe ground behind the leader so both can see the shared track.
-    const spot = lead.x - 330;
-    const floor = this.dimension.floors.find((f) => f.x + f.w - 65 >= spot);
+    // Put a separated racer on safe ground behind the leader so both can see the shared track: the last
+    // floor at or behind the spot, never one ahead of it (a floor ahead could put the trailer in front).
+    const spot = lead.x - (this.regroupGap - 150);
+    const floor = this.dimension.floors.findLast((f) => f.x + 35 <= spot);
     if (!floor) return;
-    this.place(back, Math.max(START_X, floor.x + 35, spot));
+    this.place(back, Math.max(START_X, Math.min(spot, floor.x + floor.w - 65)));
+    back.invuln = REGROUP_INVULN;
     this.emit('regroup', back);
   }
 
@@ -424,7 +453,7 @@ export class World {
     } else {
       // The first tick of a fast grounded duck keeps full speed; the slide then starts below.
       const slideStart = duck && r.grounded && !r.ducking && Math.abs(r.vx) > SLIDE_MIN_SPEED;
-      const speed = (duck && r.grounded ? DUCK_SPEED : RUN_SPEED) * speedScale(r);
+      const speed = (duck && r.grounded ? DUCK_SPEED : RUN_SPEED) * speedScale(r, this.versus);
       if (!slideStart) r.vx += bounds(direction * speed - r.vx, -1.7, 1.7);
     }
     this.moveRunner(r, Boolean(duck));
@@ -508,7 +537,7 @@ export class World {
   }
 
   checkCeiling(r: Runner, previousFeet: number): void {
-    const headHeight = r.character === 'rick' ? 72 : 62;
+    const headHeight = HEAD_HEIGHT; // same for both characters (they share one hurtbox)
     let stop = -Infinity;
     for (const platform of this.platforms) {
       // Grazing a ledge corner (12px or less of the 24px head) does not bump, so late coyote jumps survive.
@@ -699,7 +728,7 @@ export class World {
     r.boots = 0;
     clearPowers(r);
     r.sliding = 0;
-    r.respawnAt = this.tick + 55;
+    r.respawnAt = this.tick + VERSUS_RESPAWN_TICKS;
     this.emit(cause, r, r.x + 22, r.feet - 30);
     if (cause !== 'fall') this.burst(r.x + 22, r.feet - 30, 32, r.color, 5);
     this.shake = 11;

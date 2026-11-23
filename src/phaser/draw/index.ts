@@ -10,7 +10,7 @@
 // Screen shake is left to camera.shake (render.js translated the whole frame by w.shake).
 import { H, type RunnerView, type WorldView } from './view';
 import { type G, rect, withAlpha } from './prims';
-import { drawRidges, drawSky } from './sky';
+import { drawRidges, drawSky, type Panorama } from './sky';
 import { type Visible, drawCheckpoint, drawGround, drawPortal } from './terrain';
 import { drawCrystal, drawDrone, drawHitFlash, drawSlime, drawWall } from './hazards';
 import { type DustPuff, drawBlast, drawCell, drawDebris, drawDustPuff, drawGadget, drawParticles, drawPulse, drawRocket } from './items';
@@ -31,6 +31,7 @@ export * from './powers';
 export { drawMonster, drawMonsterShot, drawPortalSeal, isMonsterView, type MonsterView, type MobView } from './enemies';
 
 export interface DrawLayers {
+  panorama?: Panorama;
   /** Sky and parallax, scrollFactor (0, 1). */
   bg: G;
   /** World-space layer, scrollFactor 1. */
@@ -64,7 +65,7 @@ export function drawWorld(layers: DrawLayers, w: WorldView, opts: DrawOptions): 
   const p = w.dimension;
   if (!opts.noClear) { bg.clear(); g.clear(); overlay?.clear(); }
 
-  drawSky(bg, w.camera, p, viewWidth, viewTop);
+  drawSky(bg, w.camera, p, viewWidth, viewTop, layers.panorama, w.level);
   drawRidges(bg, w.camera, p, viewWidth);
 
   const visible: Visible = (x, width = 0) => x + width > w.camera - 100 && x < w.camera + viewWidth + 100;

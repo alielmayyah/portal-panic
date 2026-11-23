@@ -34,12 +34,12 @@ export interface WeaponDef {
 
 export const WEAPONS: Readonly<Record<WeaponId, WeaponDef>> = {
   blaster: { id: 'blaster', name: 'Pocket Blaster', blurb: 'The trusty garage pulse pistol.', kind: 'pulse', price: 0, cooldown: 15, damage: 1, range: 320, color: '#dfff78', glow: '#ffffff' },
-  scatter: { id: 'scatter', name: 'Scatter Fan', blurb: 'Three pellets in a fan. Great at close range.', kind: 'spread', price: 120, cooldown: 24, damage: 1, range: 250, color: '#ffb35c', glow: '#fff0c4' },
-  ricochet: { id: 'ricochet', name: 'Ricochet Orb', blurb: 'A plasma ball that bounces along the ground.', kind: 'bounce', price: 180, cooldown: 30, damage: 2, range: 460, color: '#7ff7d0', glow: '#e8fff7' },
+  scatter: { id: 'scatter', name: 'Scatter Fan', blurb: 'Three pellets in a fan. Great at close range.', kind: 'spread', price: 120, cooldown: 32, damage: 1, range: 250, color: '#ffb35c', glow: '#fff0c4' },
+  ricochet: { id: 'ricochet', name: 'Ricochet Orb', blurb: 'A plasma ball that bounces along the ground.', kind: 'bounce', price: 180, cooldown: 22, damage: 2, range: 460, color: '#7ff7d0', glow: '#e8fff7' },
   ember: { id: 'ember', name: 'Ember Hose', blurb: 'Hold for a short, continuous jet of flame.', kind: 'flame', price: 200, cooldown: 3, damage: .34, range: 135, color: '#ff7a3d', glow: '#ffe07a' },
-  lance: { id: 'lance', name: 'Prism Lance', blurb: 'Instant beam that pierces every monster in line.', kind: 'beam', price: 240, cooldown: 36, damage: 2, range: 430, color: '#ff5fd2', glow: '#ffe6fb' },
-  seeker: { id: 'seeker', name: 'Hornet Pods', blurb: 'Two seekers that steer into the nearest monster.', kind: 'homing', price: 280, cooldown: 42, damage: 1, range: 420, color: '#b18cff', glow: '#f0e6ff' },
-  nova: { id: 'nova', name: 'Nova Cannon', blurb: 'Hold to charge, release to fire. Full charge pierces.', kind: 'charge', price: 340, cooldown: 26, damage: 6, range: 500, color: '#6fc8ff', glow: '#e4f6ff' },
+  lance: { id: 'lance', name: 'Prism Lance', blurb: 'Instant beam that pierces every monster in line.', kind: 'beam', price: 240, cooldown: 24, damage: 2, range: 430, color: '#ff5fd2', glow: '#ffe6fb' },
+  seeker: { id: 'seeker', name: 'Hornet Pods', blurb: 'Two seekers that steer into the nearest monster.', kind: 'homing', price: 280, cooldown: 20, damage: 1, range: 420, color: '#b18cff', glow: '#f0e6ff' },
+  nova: { id: 'nova', name: 'Nova Cannon', blurb: 'Hold to charge, release to fire. Full charge pierces.', kind: 'charge', price: 340, cooldown: 20, damage: 9, range: 500, color: '#6fc8ff', glow: '#e4f6ff' },
 };
 
 /** Shop order. */
@@ -53,7 +53,7 @@ export const BASE_MAX_MISSILES = 5;
 export const MAX_MISSILE_CAP = 8;
 
 /** Coins earned during a run. */
-export const COIN_VALUES = { cell: 1, kill: 1, wall: 1, drop: 3, boss: 30, clearBase: 10, clearPerLevel: 5 } as const;
+export const COIN_VALUES = { cell: 1, kill: 1, wall: 1, drop: 3, boss: 40, clearBase: 10, clearPerLevel: 5 } as const;
 
 /** What a runner brings into a run (from the shop state). */
 export interface Loadout {
@@ -121,14 +121,22 @@ interface WeaponWorld {
   armed: boolean;
   /** Level whose clear bonus was already credited. */
   clearedLevel: number;
+  /** Boss damage held back by a hit flash, landing when the flash ends (see damage()). */
+  carry: Carry[];
 }
+
+/** Weapon damage a boss shrugged off during its short hit flash. */
+interface Carry { boss: Obstacle; amount: number; runner: Runner; dir: Facing; kind: string; armorPiercing: boolean }
+
+/** A boss hit flash (enemies.ts bossDamaged) lasts this many ticks; longer invulnerability is a phase change. */
+const HIT_FLASH_TICKS = 6;
 
 const worlds = new WeakMap<object, WeaponWorld>();
 const arms = new WeakMap<Runner, Arms>();
 
 function stateOf(world: object): WeaponWorld {
   let s = worlds.get(world);
-  if (!s) worlds.set(world, (s = { shots: [], beams: [], drops: [], level: -1, armed: false, clearedLevel: -1 }));
+  if (!s) worlds.set(world, (s = { shots: [], beams: [], drops: [], level: -1, armed: false, clearedLevel: -1, carry: [] }));
   return s;
 }
 
@@ -244,6 +252,7 @@ export function weaponsOnLevel(world: World): void {
     armsOf(world.runner).coins += clearBonus(s.level);
   }
   s.level = world.level;
+  s.carry = [];
   s.shots = [];
   s.beams = [];
   s.drops = [];
@@ -263,6 +272,7 @@ export function weaponsOnRespawn(world: World, r: Runner): void {
   const s = stateOf(world);
   s.shots = s.shots.filter((shot) => shot.runner !== r);
   s.beams = s.beams.filter((beam) => beam.runner !== r);
+  s.carry = s.carry.filter((c) => c.runner !== r);
 }
 
 /** World.breakObstacle: coins for the breaker, and monsters drop a coin pickup. */
@@ -405,6 +415,15 @@ export function damage(world: World, o: Obstacle, amount: number, runner: Runner
   if (o.broken) return 'immune';
   const mark = world.events.length;
   const result = damageObstacle(world, o, amount, { runner, dir, kind, x, y, armorPiercing });
+  // Pellets, twin seekers and flame licks often land within one boss hit flash. Hold that damage back and
+  // land it when the flash ends, so multi-hit weapons keep their real DPS (a phase change still voids it).
+  const m = o.mob;
+  if (result === 'blocked' && m?.kind === 'boss' && m.state !== 'phase' && m.invuln <= HIT_FLASH_TICKS) {
+    const carry = stateOf(world).carry;
+    const held = carry.find((c) => c.boss === o && c.runner === runner);
+    if (held) held.amount += amount;
+    else carry.push({ boss: o, amount, runner, dir, kind, armorPiercing });
+  }
   if (quiet && result === 'hit') {
     for (let i = world.events.length - 1; i >= mark; i--) if (world.events[i]!.type === 'target-hit') world.events.splice(i, 1);
   }
@@ -418,11 +437,24 @@ const isSolid = (s: Surface): boolean => !('broken' in s && s.broken);
 /** Called once per World.step (after the built-in projectiles): moves weapon shots, beams and coin drops. */
 export function stepWeapons(world: World): void {
   const s = stateOf(world);
+  if (s.carry.length) landCarry(world, s);
   for (const shot of s.shots) stepShot(world, shot);
   s.shots = s.shots.filter((shot) => shot.life > 0);
   for (const beam of s.beams) beam.life--;
   if (s.beams.length) s.beams = s.beams.filter((beam) => beam.life > 0);
   stepDrops(world, s);
+}
+
+function landCarry(world: World, s: WeaponWorld): void {
+  const keep: Carry[] = [];
+  for (const c of s.carry) {
+    const m = c.boss.mob;
+    if (c.boss.broken || !m || m.state === 'phase') continue;
+    if (m.invuln > 0) { keep.push(c); continue; }
+    const x = c.dir > 0 ? c.boss.wx + 3 : c.boss.wx + c.boss.w - 3;
+    damage(world, c.boss, c.amount, c.runner, x, c.boss.y + c.boss.h / 2, c.dir, true, c.armorPiercing, c.kind);
+  }
+  s.carry = keep;
 }
 
 function stepShot(world: World, shot: WeaponShot): void {
@@ -497,6 +529,8 @@ function bounce(world: World, shot: WeaponShot, oldY: number): void {
 
 function stepDrops(world: World, s: WeaponWorld): void {
   if (!s.drops.length) return;
+  // Versus: alternate who is checked first by tick parity, so drops both runners touch on the same tick are shared fairly.
+  const runners = world.runners.length > 1 && world.tick % 2 ? [...world.runners].reverse() : world.runners;
   for (const drop of s.drops) {
     drop.life--;
     drop.spin += .12;
@@ -518,7 +552,7 @@ function stepDrops(world: World, s: WeaponWorld): void {
       if (drop.y > GROUND_Y + 90) drop.life = 0;
     }
     if (drop.life <= 0) continue;
-    for (const r of world.runners) {
+    for (const r of runners) {
       if (!r.alive) continue;
       const box = r.ducking ? { x: r.x + 6, y: r.feet - 30, w: 38, h: 28 } : { x: r.x + 7, y: r.feet - 58, w: 31, h: 56 };
       if (drop.x + 9 < box.x || drop.x - 9 > box.x + box.w || drop.y + 9 < box.y || drop.y - 9 > box.y + box.h) continue;

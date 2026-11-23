@@ -56,12 +56,16 @@ export const POWERS: Readonly<Record<PowerKind, PowerInfo>> = {
   magnet: { name: 'Magnet', color: '#ff5fa2', ticks: 10 * 60, blurb: 'pulls in cells and coins' },
   freeze: { name: 'Time freeze', color: '#9fd8ff', ticks: 5 * 60, blurb: 'enemies and their shots stop' },
   ghost: { name: 'Ghost', color: '#c9c3ff', ticks: 4 * 60, blurb: 'pass through hazards' },
-  rapid: { name: 'Rapid fire', color: '#ffe45c', ticks: 10 * 60, blurb: 'cooldowns halved' },
+  // 7 s (was 10): at 10 s a full-uptime blaster removed every one of the final boss's 48 HP.
+  rapid: { name: 'Rapid fire', color: '#ffe45c', ticks: 7 * 60, blurb: 'cooldowns halved' },
   giant: { name: 'Giant', color: '#7dff8a', ticks: 6 * 60, blurb: 'double size, stomp monsters' },
 };
 
 /** Turbo multipliers. */
 export const TURBO_SPEED = 1.4;
+/** Versus turbo is milder and shorter so a pickup does not decide the race. */
+export const TURBO_SPEED_VERSUS = 1.25;
+export const TURBO_TICKS_VERSUS = 6 * 60;
 export const TURBO_JUMP = 1.15;
 /** Giant scale (drawing and contact box). */
 export const GIANT_SCALE = 2;
@@ -71,6 +75,11 @@ export const MAGNET_PULL = 7;
 export const MAGNET_KINDS: ReadonlySet<string> = new Set(['cell', 'coin']);
 /** Invulnerability granted when ghost or giant ends, so the runner is not killed by what it was inside. */
 export const POWER_END_GRACE = 30;
+/**
+ * Longest stretch of one time freeze that should hold a boss (ticks). enemies.ts can read bossFrozen(w)
+ * instead of isFrozen(w) for the boss so a freeze is a breather, not 5 s of free hits.
+ */
+export const BOSS_FREEZE_TICKS = 120;
 
 /** Events this module adds to the World event stream. */
 export const POWER_EVENTS = [...POWER_KINDS, 'stomp', 'power-end'] as const satisfies readonly WorldEventType[];
@@ -93,6 +102,8 @@ export interface PowerWorld {
   orbs: { wx: number; y: number; kind: string; taken?: boolean }[];
   shake: number;
   tick: number;
+  /** Two-racer mode (World.versus); some powers are milder there. */
+  versus?: boolean;
   burst(x: number, y: number, count: number, color: string, power: number): void;
   /** Used by giant stomps on level hazards. */
   breakObstacle(obstacle: Obstacle, runner: Runner): void;
@@ -120,7 +131,8 @@ export const isGiant = (r: Pick<Runner, 'powers'>): boolean => hasPower(r, 'gian
 /** Enemy shots pass through (ghost) or bounce off (giant). */
 export const shotImmune = (r: Pick<Runner, 'powers'>): boolean => isGhost(r) || isGiant(r);
 /** Horizontal run speed multiplier. */
-export const speedScale = (r: Pick<Runner, 'powers'>): number => (hasPower(r, 'turbo') ? TURBO_SPEED : 1);
+export const speedScale = (r: Pick<Runner, 'powers'>, versus = false): number =>
+  (hasPower(r, 'turbo') ? (versus ? TURBO_SPEED_VERSUS : TURBO_SPEED) : 1);
 /** Jump velocity multiplier. */
 export const jumpScale = (r: Pick<Runner, 'powers'>): number => (hasPower(r, 'turbo') ? TURBO_JUMP : 1);
 /** Weapon cooldown multiplier (rapid fire). */
@@ -162,7 +174,7 @@ function stompFx(w: PowerWorld, r: Runner, x: number, y: number): void {
 /** Pickup hook: grants (or refreshes) a power. */
 export function grantPower(w: PowerWorld, r: Runner, kind: PowerKind, x?: number, y?: number): void {
   r.powers ??= {};
-  r.powers[kind] = POWERS[kind].ticks;
+  r.powers[kind] = kind === 'turbo' && w.versus ? TURBO_TICKS_VERSUS : POWERS[kind].ticks;
   push(w, kind, r, x, y);
   if (x !== undefined && y !== undefined) w.burst(x, y, 20, POWERS[kind].color, 3.4);
 }
@@ -229,16 +241,23 @@ function pullPickups(w: PowerWorld, r: Runner): void {
 // Ticks spent in time freeze this level, per world (kept here so World needs no new field).
 const frozenTicks = new WeakMap<object, number>();
 
+// Ticks the current time freeze has lasted (cleared when it ends).
+const freezeRun = new WeakMap<object, number>();
+
 /** Level load hook: resets the freeze clock. */
-export function resetWorldPowers(w: object): void { frozenTicks.delete(w); }
+export function resetWorldPowers(w: object): void { frozenTicks.delete(w); freezeRun.delete(w); }
+
+/** Time freeze for bosses: true only for the first BOSS_FREEZE_TICKS of a freeze. */
+export const bossFrozen = (w: Pick<PowerWorld, 'runners'>): boolean => isFrozen(w) && (freezeRun.get(w) ?? 0) <= BOSS_FREEZE_TICKS;
 
 /**
  * Per-step world hook (once per World.step). Returns isFrozen(w) and, while frozen, advances the
  * frozen-time counter so enemyClock stands still.
  */
 export function stepWorldPowers(w: Pick<PowerWorld, 'runners'>): boolean {
-  if (!isFrozen(w)) return false;
+  if (!isFrozen(w)) { freezeRun.delete(w); return false; }
   frozenTicks.set(w, (frozenTicks.get(w) ?? 0) + 1);
+  freezeRun.set(w, (freezeRun.get(w) ?? 0) + 1);
   return true;
 }
 
@@ -253,6 +272,7 @@ export const enemyClock = (w: Pick<PowerWorld, 'tick'>): number => w.tick - (fro
  * skipped: ghost passes through it; giant stomps it (world.breakObstacle) when the enlarged box touches it.
  */
 export function hazardContact(w: PowerWorld, r: Runner, o: Obstacle, runnerBox: Box): boolean {
+  if (o.type === 'boss' && (isGhost(r) || isGiant(r))) return bossContact(w, r, o, runnerBox);
   if (isGhost(r)) return true;
   if (!isGiant(r)) return false;
   // Stomps use the hazard's full box (generous for crystals): the giant crushes anything it touches.
@@ -260,6 +280,33 @@ export function hazardContact(w: PowerWorld, r: Runner, o: Obstacle, runnerBox: 
     w.breakObstacle(o, r);
     stompFx(w, r, o.wx + o.w / 2, o.y + o.h / 2);
   }
+  return true;
+}
+
+/**
+ * Ghost or giant touching a boss. Always skips the lethal check. A ghost cannot pass through a boss (it is
+ * shoved out of the body, no harm done); a giant gets one stomp, which knocks it back to normal size.
+ * Without this a 4 s ghost could stand inside the boss for a whole phase, and a 6 s giant stomped even the
+ * final boss to death.
+ */
+function bossContact(w: PowerWorld, r: Runner, o: Obstacle, runnerBox: Box): boolean {
+  const body = { x: o.wx, y: o.y, w: o.w, h: o.h };
+  if (isGiant(r)) {
+    if (!overlaps(powerHitbox(r, runnerBox), body)) return true;
+    // One stomp (enemies.ts turns it into damage and a knockback), then the giant shrinks back.
+    w.breakObstacle(o, r);
+    stompFx(w, r, o.wx + o.w / 2, o.y + o.h / 2);
+    delete r.powers!.giant;
+    r.invuln = Math.max(r.invuln, POWER_END_GRACE);
+    push(w, 'power-end', r);
+    return true;
+  }
+  if (!overlaps(runnerBox, body)) return true;
+  // Shove the ghost out of the boss on the nearer side.
+  const offset = runnerBox.x - r.x;
+  const left = runnerBox.x + runnerBox.w / 2 < o.wx + o.w / 2;
+  r.x = Math.max(12, left ? o.wx - runnerBox.w - offset : o.wx + o.w - offset);
+  r.vx = 0;
   return true;
 }
 

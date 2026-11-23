@@ -1,6 +1,8 @@
+import { GadgetArt } from './GadgetArt';
+import { MenuIcon } from './icons';
 import { forwardRef, type CSSProperties } from 'react';
 import type { Pilot } from '../../core/store';
-import type { WeaponDef, WeaponKind } from '../../core/weapons';
+import type { WeaponDef } from '../../core/weapons';
 
 export interface ShopWeaponCardProps {
   weapon: WeaponDef;
@@ -53,7 +55,7 @@ export const ShopWeaponCard = forwardRef<HTMLElement, ShopWeaponCardProps>(funct
       style={{ '--weapon': weapon.color, '--weapon-glow': weapon.glow } as CSSProperties}
     >
       <div className="shop-card-art" aria-hidden="true">
-        <WeaponGlyph kind={weapon.kind} />
+        <GadgetArt kind={weapon.kind} />
         <span className="shop-badges">
           {equippedBy.map((p) => <i key={p} className={`shop-badge shop-badge--${p}`}>{PILOT_TAG[p]}</i>)}
         </span>
@@ -76,6 +78,7 @@ export const ShopWeaponCard = forwardRef<HTMLElement, ShopWeaponCardProps>(funct
               disabled={equippedHere}
               onClick={props.onEquip}
             >
+              <MenuIcon name={equippedHere ? 'check' : 'equip'} />
               {equippedHere ? `Equipped · ${pilotName}` : `Equip for ${pilotName}`}
             </button>
           </>
@@ -89,7 +92,7 @@ export const ShopWeaponCard = forwardRef<HTMLElement, ShopWeaponCardProps>(funct
               aria-label={`Buy ${weapon.name} for ${weapon.price} coins${affordable ? '' : ' (not enough coins)'}`}
               onClick={props.onBuy}
             >
-              Buy
+              <MenuIcon name="buy" />Buy
             </button>
           </>
         )}
@@ -97,25 +100,3 @@ export const ShopWeaponCard = forwardRef<HTMLElement, ShopWeaponCardProps>(funct
     </article>
   );
 });
-
-/** Original line-art glyph per weapon kind. */
-export function WeaponGlyph({ kind }: { kind: WeaponKind }) {
-  const common = { viewBox: '0 0 64 40', fill: 'none', stroke: 'currentColor', strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
-  const body = <path d="M6 24h22l4-6h8v12h-8l-4-3H12l-3 6H5Z" />;
-  switch (kind) {
-    case 'spread':
-      return <svg {...common}>{body}<path d="M44 24h14M44 22l12-8M44 26l12 8" /></svg>;
-    case 'beam':
-      return <svg {...common}>{body}<path d="M42 24h20" strokeWidth={4} /><path d="M42 20h18M42 28h18" strokeWidth={1} /></svg>;
-    case 'bounce':
-      return <svg {...common}>{body}<path d="M42 24q5-12 10 0t10 0" /><circle cx="58" cy="15" r="4" /></svg>;
-    case 'homing':
-      return <svg {...common}>{body}<path d="M44 18q8-8 14 0M44 30q8 8 14 0" /><path d="m55 13 4 5-6 1M55 35l4-5-6-1" /></svg>;
-    case 'flame':
-      return <svg {...common}>{body}<path d="M42 24q6-8 10-2 2-8 8-6-1 6 2 8-4 8-12 6-5 0-8-6Z" /></svg>;
-    case 'charge':
-      return <svg {...common}>{body}<circle cx="52" cy="24" r="8" /><circle cx="52" cy="24" r="3" /></svg>;
-    default:
-      return <svg {...common}>{body}<path d="M44 24h8" /><circle cx="56" cy="24" r="2" /></svg>;
-  }
-}

@@ -3,7 +3,7 @@
 import { GADGET_COLORS, type BlastView, type DebrisView, type ParticleView, type PickupView, type ShotView } from './view';
 import { type G, type Pt, INK, glowOval, glowShape, line, oval, rect, shape, withAlpha } from './prims';
 
-const CELL: Pt[] = [[-7, -7], [4, -10], [8, -6], [7, 7], [-4, 10], [-8, 6]];
+const CELL: Pt[] = [[-6, -9], [5, -9], [7, -6], [7, 7], [4, 10], [-5, 10], [-7, 7], [-7, -6]];
 
 export function drawCell(g: G, o: PickupView, x: number, t: number): void {
   const y = o.y + Math.sin(t * .08 + o.phase) * 3;
@@ -11,8 +11,14 @@ export function drawCell(g: G, o: PickupView, x: number, t: number): void {
   g.translateCanvas(x, y);
   g.rotateCanvas(.39);
   glowShape(g, CELL, '#caff57', .5);
-  shape(g, '#aaf650', CELL, '#42652b', 1.8);
-  shape(g, '#efffb7', [[1, -6], [-4, 1], [0, 1], [-1, 7], [5, -2], [1, -2]]);
+  shape(g, '#477e33', CELL, INK, 2);
+  shape(g, '#b9f343', [[-5, -4], [-1, -2], [5, -5], [5, 7], [-5, 7]]);
+  line(g, '#efffb7', 1.5, [[-3, -4], [-3, 2]]);
+  oval(g, 2, 3, 1.5, 1.5, '#f4ffb7');
+  for (const cap of [-9, 7]) {
+    rect(g, '#637777', -6, cap, 12, 3);
+    line(g, '#cbded0', 1.1, [[-4, cap], [3, cap]]);
+  }
   g.restore();
 }
 
@@ -20,12 +26,16 @@ export function drawGadget(g: G, item: PickupView, t: number): void {
   const x = item.wx, y = item.y + Math.sin(t * .09 + item.phase) * 3;
   const color = GADGET_COLORS[item.kind] ?? '#ffffff';
   glowOval(g, x, y, 14, 14, color, 9, .45);
-  oval(g, x, y, 14, 14, '#302440', color);
+  oval(g, x, y + 1, 15, 15, '#212635', INK, 2);
+  oval(g, x, y - .5, 13.5, 13.5, '#33354c', color, 1.8);
   if (item.kind === 'shield') {
-    shape(g, color, [[x - 7, y - 6], [x, y - 10], [x + 7, y - 6], [x + 6, y + 2], [x, y + 8], [x - 6, y + 2]]);
+    shape(g, color, [[x - 8, y - 6], [x, y - 10], [x + 8, y - 6], [x + 7, y + 2], [x + 4, y + 6], [x, y + 9], [x - 6, y + 3]], INK, 1.3);
+    shape(g, '#388eae', [[x, y - 6], [x + 5, y - 4], [x + 4, y + 2], [x, y + 5]]);
+    line(g, '#e5ffff', 1.4, [[x - 5, y - 4], [x - 1, y - 6]]);
   } else {
-    line(g, color, 2.5, [[x - 6, y + 3], [x, y - 3], [x + 6, y + 3]]);
-    line(g, color, 1.6, [[x - 5, y - 2], [x, y - 7], [x + 5, y - 2]]);
+    shape(g, color, [[x - 6, y - 8], [x + 1, y - 7], [x, y - 1], [x + 7, y + 1], [x + 8, y + 4], [x + 5, y + 6], [x - 7, y + 5]], INK, 1.3);
+    line(g, '#fff1ff', 1.5, [[x - 5, y - 5], [x, y - 4]]);
+    line(g, '#a58ace', 1.4, [[x - 7, y + 8], [x + 3, y + 9]]);
   }
 }
 

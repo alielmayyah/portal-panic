@@ -32,16 +32,17 @@
 // Boss events (World events, runner may be null; x/y = boss position) for sound and music:
 //   'boss-intro'   the boss wakes (a runner enters its arena, ~640 away, or shoots it).
 //   'boss-phase'   phase change; the new phase is on world.boss.phase (and obstacle.mob.phase).
-//   'boss-charge'  charge-attack windup starts (the dash follows 40 ticks later).
+//   'boss-charge'  charge-attack windup starts (the dash follows BOSS_STATS[v].chargeWindup ticks later).
 //   'boss-volley'  a projectile volley starts (each orb also sends 'enemy-fire').
 //   'boss-summon'  minions spawned.
 //   'boss-hurt'    each damaging hit (blocked hits during invulnerability send 'armor-block').
 //   'boss-death'   the boss dies (big explosion), immediately followed by
 //   'portal-open'  the exit unseals (x/y = portal).
-//   world.boss = { name, hp, maxHp, phase, active, awake, defeated, x } | null; active = fight in progress.
+//   world.boss = { name, hp, maxHp, phase, active, awake, defeated, x, killer?, openedAt? } | null; active = fight
+//   in progress. killer/openedAt: the runner that landed the killing blow and the world tick the portal opened.
 // Other monster events: 'hop', 'swoop', 'spit', 'armor-block' (brute front armor), 'split'.
 // ---------------------------------------------------------------------------------------------
-import { isFrozen } from './powers';
+import { bossFrozen, isFrozen } from './powers';
 import type {
   DeathCause, EnemyShot, Facing, HazardDef, MonsterDeathCause, MonsterType, Obstacle, Runner, WorldEvent, WorldEventType,
 } from './types';
@@ -67,6 +68,53 @@ export const MONSTERS: Readonly<Record<MonsterType, MonsterInfo>> = {
 };
 export const BOSS_NAMES = ['Brood Warden Gulvax', 'Rift Tyrant Ozzaroth'] as const;
 const BOSS_BOUNTY = [300, 800] as const;
+
+/**
+ * Boss tuning (index = variant: 0 mid boss, 1 final boss). Measured with the free blaster (4 hits/s);
+ * tests/balance-combat.test.ts pins the targets (time to kill, windups, avoidability).
+ */
+export interface BossStats {
+  hp: number;
+  /**
+   * Body box. The art (creatureBosses.ts) is drawn at a fixed size on the box's bottom centre, so w/h only set
+   * the hitbox: hazardBox (5 px inset) then stays inside the drawn carapace/mantle, without the thin crown
+   * spikes and horn tips a jumping runner should be able to graze.
+   */
+  w: number;
+  h: number;
+  /** Ticks of mouth-open telegraph before the first orb. */
+  volleyWindup: number;
+  /** Ticks between orbs of a volley. */
+  volleyGap: number;
+  /** Extra ticks before a high orb that follows a low one, so a runner who jumped has landed and can duck. */
+  volleyLand: number;
+  /** Orbs per volley = volleyBase + phase. */
+  volleyBase: number;
+  /** Ticks of charge telegraph before the dash. */
+  chargeWindup: number;
+  /** Dash speed (world units per tick). */
+  dash: number;
+  /** Idle cooldown between attacks, per phase (index 1..3). */
+  rest: readonly [number, number, number, number];
+}
+export const BOSS_STATS: readonly [BossStats, BossStats] = [
+  { hp: 120, w: 90, h: 90, volleyWindup: 36, volleyGap: 17, volleyLand: 27, volleyBase: 2, chargeWindup: 44, dash: 8.5, rest: [0, 100, 80, 64] },
+  { hp: 200, w: 100, h: 108, volleyWindup: 36, volleyGap: 15, volleyLand: 29, volleyBase: 3, chargeWindup: 44, dash: 9.5, rest: [0, 90, 72, 56] },
+];
+/** Orb height above the boss floor: high orbs (duck under) and low orbs (jump over). */
+export const ORB_HIGH = 48;
+export const ORB_LOW = 18;
+/** Ticks the boss is shielded while it changes phase. */
+export const BOSS_PHASE_TICKS = 80;
+/** Ticks of hit flash during which further damage is blocked. */
+export const BOSS_HIT_INVULN = 6;
+/**
+ * Shield contact / giant stomp on a boss: damage, and the minimum ticks between two such hits. powers.ts gives
+ * a giant exactly one boss stomp per pickup, so `stomp` is the giant's whole boss value (~8% of the final boss);
+ * a shield is ~5%. Scale both with BOSS_STATS hp.
+ */
+export const BOSS_CONTACT_DAMAGE = { shield: 10, stomp: 16 } as const;
+export const BOSS_CONTACT_COOLDOWN = 120;
 const SMALL_BOUNTY = 8;
 /** Splitter children use the splitter type with mob.small. */
 export const SMALL_SPLITTER = { w: 28, h: 24, hp: 1 } as const;
@@ -76,8 +124,11 @@ const GROUND = 340;
 export const SWOOP_HOVER = 150;
 /** Lowest swooper point: its hitbox bottom stays this far above the floor (a ducked runner is 30 tall). */
 export const SWOOP_CLEARANCE = 34;
-/** Versus: a killed monster only comes back when its spawn is at least this far from every other living runner. */
-export const OFFSCREEN = 1000;
+/**
+ * Versus: a killed monster only comes back when its spawn is at least this far from every other living runner.
+ * Wider than the zoomed-out versus view (about 1260 world units ahead at 21:9).
+ */
+export const OFFSCREEN = 1400;
 const DEFAULT_RANGE: Record<MonsterType, number> = { hopper: 150, swooper: 260, spitter: 0, brute: 130, splitter: 80, boss: 420 };
 
 /** Builds one monster definition for level data (see the header). */
@@ -91,9 +142,8 @@ export function makeMonster(type: MonsterType, wx: number, floor = GROUND, varia
     case 'splitter': return { ...base, w: 54, h: 46, y: floor - 46, hp: 3 };
     case 'boss': {
       const final = variant ? 1 : 0;
-      const w = final ? 116 : 100;
-      const h = final ? 118 : 104;
-      return { ...base, variant: final, range: range ?? (final ? 460 : 420), w, h, y: floor - h, hp: final ? 48 : 30 };
+      const { w, h, hp } = BOSS_STATS[final];
+      return { ...base, variant: final, range: range ?? (final ? 460 : 420), w, h, y: floor - h, hp };
     }
   }
 }
@@ -140,6 +190,8 @@ export interface MobState {
   phase: number;
   attack: number;
   shots: number;
+  /** Boss: ticks until shield contact or a giant stomp can damage it again. */
+  contactCool: number;
 }
 
 export interface BossInfo {
@@ -152,7 +204,13 @@ export interface BossInfo {
   awake: boolean;
   defeated: boolean;
   x: number;
+  /** The runner whose hit killed the boss (set on 'boss-death'). */
+  killer?: Runner;
+  /** world.tick at which the boss died and the portal opened. */
+  openedAt?: number;
 }
+/** Who killed a boss and when (kept across the per-step rebuilds of world.boss). */
+export interface BossKill { killer: Runner; openedAt: number }
 export interface BossHud { name: string; hp: number; maxHp: number; phase: number }
 
 export interface DamageSource {
@@ -170,6 +228,7 @@ export type DamageResult = 'hit' | 'killed' | 'blocked' | 'immune';
 // Per-world bookkeeping that is not part of the public state.
 const origins = new WeakMap<Obstacle, HazardDef>();
 const pending = new WeakMap<World, Obstacle[]>();
+const kills = new WeakMap<Obstacle, BossKill>();
 
 const push = (w: World, type: WorldEventType, runner: Runner | null = null, x?: number, y?: number) => {
   const event: WorldEvent = { type, runner };
@@ -189,7 +248,7 @@ function freshMob(def: HazardDef, spawned = false, parent: Obstacle | null = nul
     kind, state: kind === 'boss' ? 'sleep' : kind === 'swooper' ? 'hover' : kind === 'brute' || kind === 'splitter' ? 'walk' : 'idle',
     t: 0, cool: 30 + Math.floor((def.phase ?? 0) * 10) % 40, vx: 0, vy: 0, air: false, dir: -1, turnTo: -1,
     home, anchor: def.wx, range: def.range ?? DEFAULT_RANGE[kind], variant: def.variant ?? 0, small: false,
-    spawned, parent, grace: 0, invuln: 0, land: 99, fromX: def.wx, fromY: def.y, toX: def.wx, phase: 1, attack: 0, shots: 0,
+    spawned, parent, grace: 0, invuln: 0, land: 99, fromX: def.wx, fromY: def.y, toX: def.wx, phase: 1, attack: 0, shots: 0, contactCool: 0,
   };
 }
 
@@ -251,6 +310,8 @@ function syncBoss(w: World): void {
     phase: m?.phase ?? 1, awake: Boolean(m && m.state !== 'sleep'), defeated: Boolean(boss.broken), x: cx(boss),
     active: Boolean(m && m.state !== 'sleep' && !boss.broken),
   };
+  const kill = boss.broken ? kills.get(boss) : undefined;
+  if (kill) { w.boss.killer = kill.killer; w.boss.openedAt = kill.openedAt; }
 }
 
 /** Per-step hook (after the sentries): monster AI, goo splats, spawn queue, boss info. */
@@ -258,23 +319,34 @@ export function stepEnemies(w: World): void {
   const queue = pending.get(w);
   if (queue?.length) { w.obstacles.push(...queue); queue.length = 0; }
   if (w.obstacles.some((o) => o.broken && o.mob?.spawned)) w.obstacles = w.obstacles.filter((o) => !(o.broken && o.mob?.spawned));
-  if (!isFrozen(w)) {
-    for (const o of w.obstacles) {
-      const m = o.mob;
-      if (!m || o.broken) continue;
-      m.t++;
-      if (m.grace) m.grace--;
+  const frozen = isFrozen(w);
+  // A time freeze holds a boss only briefly (powers.ts bossFrozen); it is a breather, not free hits.
+  const bossFree = !frozen || !bossFrozen(w);
+  for (const o of w.obstacles) {
+    const m = o.mob;
+    if (!m || o.broken) continue;
+    if (frozen && !(m.kind === 'boss' && bossFree)) {
+      // Hit flashes keep counting down while frozen, so a frozen boss takes one hit per flash instead of
+      // one hit for the whole freeze; a phase change finishes on time too.
       if (m.invuln) m.invuln--;
-      if (m.land < 99) m.land++;
-      switch (m.kind) {
-        case 'hopper': stepHopper(w, o, m); break;
-        case 'swooper': stepSwooper(w, o, m); break;
-        case 'spitter': stepSpitter(w, o, m); break;
-        case 'brute': stepBrute(w, o, m); break;
-        case 'splitter': if (m.small) stepHopper(w, o, m); else stepBrute(w, o, m); break;
-        case 'boss': stepBoss(w, o, m); break;
-      }
+      if (m.kind === 'boss' && m.state === 'phase' && ++m.t >= BOSS_PHASE_TICKS) { m.state = 'idle'; m.t = 0; m.cool = 30; }
+      continue;
     }
+    m.t++;
+    if (m.grace) m.grace--;
+    if (m.invuln) m.invuln--;
+    if (m.contactCool) m.contactCool--;
+    if (m.land < 99) m.land++;
+    switch (m.kind) {
+      case 'hopper': stepHopper(w, o, m); break;
+      case 'swooper': stepSwooper(w, o, m); break;
+      case 'spitter': stepSpitter(w, o, m); break;
+      case 'brute': stepBrute(w, o, m); break;
+      case 'splitter': if (m.small) stepHopper(w, o, m); else stepBrute(w, o, m); break;
+      case 'boss': stepBoss(w, o, m); break;
+    }
+  }
+  if (!frozen) {
     for (const shot of w.enemyShots) {
       if (shot.style !== 'goo' || shot.life <= 0 || (shot.vy ?? 0) <= 0) continue;
       if (shot.y >= GROUND - 2 || w.dimension.floors.some((f) => shot.x > f.x && shot.x < f.x + f.w && Math.abs(shot.y - f.y) < 6 && f.y < GROUND)) {
@@ -293,7 +365,9 @@ function nearest(w: World, x: number, range: number, home?: number, rise = 200):
   for (const r of w.runners) {
     if (!r.alive) continue;
     const d = Math.abs(rx(r) - x);
-    if (d >= gap) continue;
+    if (d >= range || d > gap) continue;
+    // Equal distance (versus runners side by side): alternate by tick instead of always picking runner 0.
+    if (best && d === gap && w.tick % 2 === 0) continue;
     if (home !== undefined && Math.abs(r.feet - home) > rise) continue;
     gap = d;
     best = r;
@@ -447,6 +521,7 @@ function stepBoss(w: World, o: Obstacle, m: MobState): void {
   const left = o.baseX - m.range;
   const right = o.baseX;
   const final = m.variant === 1;
+  const stats = BOSS_STATS[final ? 1 : 0];
   o.y = m.home - o.h;
   if (m.state === 'sleep') {
     if (nearest(w, cx(o), BOSS_WAKE)) wakeBoss(w, o, m);
@@ -457,7 +532,7 @@ function stepBoss(w: World, o: Obstacle, m: MobState): void {
   switch (m.state) {
     case 'phase':
       o.wx += clamp(o.baseX - o.wx, -4, 4);
-      if (m.t >= 80) { m.state = 'idle'; m.t = 0; m.cool = 30; }
+      if (m.t >= BOSS_PHASE_TICKS) { m.state = 'idle'; m.t = 0; m.cool = 30; }
       return;
     case 'idle': {
       o.wx += clamp(o.baseX - m.range * .25 - o.wx, -.8, .8);
@@ -473,29 +548,27 @@ function stepBoss(w: World, o: Obstacle, m: MobState): void {
       return;
     }
     case 'volley': {
-      const count = 2 + m.phase + (final ? 1 : 0);
-      const gap = final ? 14 : 17;
-      if (m.t >= 30 && (m.t - 30) % gap === 0 && m.shots < count) {
-        // Alternate high shots (duck under) and low shots (jump over).
-        const y = m.shots % 2 ? m.home - 18 : m.home - 48;
+      const count = stats.volleyBase + m.phase;
+      if (m.shots < count && m.t === volleyTime(stats, m.shots)) {
+        // Alternate high shots (duck under) and low shots (jump over); volleyTime sets the spacing.
+        const y = m.home - (m.shots % 2 ? ORB_LOW : ORB_HIGH);
         const x = m.dir > 0 ? o.wx + o.w : o.wx;
-        w.enemyShots.push({ x, prevX: x, y, vx: m.dir * (5.6 + m.phase * .8), life: 170, dodged: [], cause: 'boss-hit', style: 'orb' });
+        w.enemyShots.push({ x, prevX: x, y, vx: m.dir * orbSpeed(m.phase), life: 170, dodged: [], cause: 'boss-hit', style: 'orb' });
         m.shots++;
         push(w, 'enemy-fire', null, x, y);
       }
-      if (m.shots >= count && m.t >= 30 + count * gap) endAttack(m);
+      if (m.shots >= count && m.t >= volleyTime(stats, count - 1) + stats.volleyGap) endAttack(m);
       return;
     }
     case 'charge':
-      if (m.t >= 40) {
+      if (m.t >= stats.chargeWindup) {
         m.state = 'dash';
         m.t = 0;
         w.shake = Math.max(w.shake, 8);
       }
       return;
     case 'dash': {
-      const speed = final ? 9.5 : 8.5;
-      o.wx = clamp(o.wx + m.dir * speed, left, right);
+      o.wx = clamp(o.wx + m.dir * stats.dash, left, right);
       if (o.wx <= left || o.wx >= right || m.t > 80) { m.state = 'return'; m.t = 0; w.shake = Math.max(w.shake, 6); }
       return;
     }
@@ -526,8 +599,19 @@ function stepBoss(w: World, o: Obstacle, m: MobState): void {
 function endAttack(m: MobState): void {
   m.state = 'idle';
   m.t = 0;
-  m.cool = [0, 100, 80, 60][m.phase]! - (m.variant ? 12 : 0);
+  m.cool = BOSS_STATS[m.variant ? 1 : 0].rest[m.phase]!;
 }
+
+/** Boss orb speed per phase (world units per tick). */
+export const orbSpeed = (phase: number): number => 5.6 + phase * .8;
+
+/**
+ * Tick (since the volley started) at which orb `k` fires. Orbs alternate high (even k) and low (odd k),
+ * `volleyGap` apart; a high orb after a low one waits `volleyLand` more ticks, so a runner who jumped the low
+ * orb has landed (a full jump lasts ~37 ticks) before it must duck. This rules out unavoidable low-high-low chains.
+ */
+export const volleyTime = (s: Pick<BossStats, 'volleyWindup' | 'volleyGap' | 'volleyLand'>, k: number): number =>
+  s.volleyWindup + k * s.volleyGap + Math.floor(k / 2) * s.volleyLand;
 
 function wakeBoss(w: World, o: Obstacle, m: MobState): void {
   if (m.state !== 'sleep') return;
@@ -538,14 +622,14 @@ function wakeBoss(w: World, o: Obstacle, m: MobState): void {
 }
 
 function bossDamaged(w: World, o: Obstacle, m: MobState): void {
-  m.invuln = 6;
+  m.invuln = BOSS_HIT_INVULN;
   push(w, 'boss-hurt', null, cx(o), o.y + o.h / 2);
   const phase = bossPhaseFor(o);
   if (phase > m.phase) {
     m.phase = phase;
     m.state = 'phase';
     m.t = 0;
-    m.invuln = 80;
+    m.invuln = BOSS_PHASE_TICKS;
     w.shake = Math.max(w.shake, 10);
     // Clear the boss's own shots so a phase change gives a breather.
     w.enemyShots = w.enemyShots.filter((s) => s.cause !== 'boss-hit');
@@ -597,13 +681,15 @@ export function onBreakObstacle(w: World, o: Obstacle, runner: Runner, shield: b
   const m = o.mob;
   if (!m) return false;
   if (m.kind === 'boss' && o.hp > 0) {
-    // Shield contact or a giant stomp: heavy damage and a knockback, never an instant kill.
+    // Shield contact or a giant stomp: heavy damage and a knockback, never an instant kill. A giant touches
+    // the boss again every few ticks, so contact damage has its own cooldown (else giant melts a boss).
     if (m.state === 'sleep') wakeBoss(w, o, m);
     const away = sign(rx(runner) - cx(o));
     runner.x = clamp(runner.x + away * 60, 12, w.dimension.width - 52);
     runner.invuln = Math.max(runner.invuln, 50);
-    if (m.invuln > 0 || m.state === 'phase') return true;
-    o.hp -= shield ? 3 : 4;
+    if (m.invuln > 0 || m.state === 'phase' || m.contactCool > 0) return true;
+    m.contactCool = BOSS_CONTACT_COOLDOWN;
+    o.hp -= shield ? BOSS_CONTACT_DAMAGE.shield : BOSS_CONTACT_DAMAGE.stomp;
     if (o.hp > 0) {
       o.flash = 9;
       w.burst(cx(o), o.y + o.h / 2, 14, '#ffffff', 4);
@@ -655,6 +741,7 @@ function bossExplosion(w: World, o: Obstacle, m: MobState, runner: Runner): void
   for (const queued of pending.get(w) ?? []) queued.broken = true;
   w.enemyShots = w.enemyShots.filter((s) => s.cause !== 'boss-hit');
   m.state = 'idle';
+  kills.set(o, { killer: runner, openedAt: w.tick });
   push(w, 'boss-death', runner, x, y);
   push(w, 'portal-open', runner, w.dimension.exit, 244);
 }

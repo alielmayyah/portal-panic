@@ -19,7 +19,6 @@
 .race-window {
   position: relative; background: #45244c; overflow: hidden;
   @include no-touch-select;
-  @include crt-overlay;
 }
 .race-stage {
   @include phaser-stage;

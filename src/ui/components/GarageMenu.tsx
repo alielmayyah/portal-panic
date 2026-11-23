@@ -4,6 +4,8 @@ import type { Pilot } from '../../core/store';
 import { menuIn } from '../anim';
 import { HeaderTools, type HeaderToolsProps } from './Masthead';
 import { scoreText } from './format';
+import { MenuIcon } from './icons';
+import dimensions from '../../assets/dimensions.webp?inline';
 
 export type { Mode };
 export type PilotId = Pilot;
@@ -25,6 +27,8 @@ export interface GarageMenuProps {
   runs: number;
   /** Phaser preview scene mounts into this div. */
   previewRef?: Ref<HTMLDivElement>;
+  previewOpen?: boolean;
+  onPreviewToggle?: () => void;
   /** Called with each portrait canvas (and null on unmount) so a helper can draw the runner bust. */
   portraitRef?: (pilot: PilotId, canvas: HTMLCanvasElement | null) => void;
   /** Start button ref, so the app can focus it after returning from a run. */
@@ -50,13 +54,13 @@ const PILOTS: { id: PilotId; name: string }[] = [
 ];
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
+const LEVEL_ICON = { Locked: 'lock', Cleared: 'cleared', Selected: 'selected', Ready: 'ready' } as const;
 
 export function GarageMenu(props: GarageMenuProps) {
   const { mode, pilot, levels, selectedLevel, unlocked, cleared, best, runs, previewRef, portraitRef, startRef, tools } = props;
   const rootRef = useRef<HTMLElement>(null);
   const versus = mode === 'versus';
   const level = levels[selectedLevel] ?? levels[0];
-  const pilotName = PILOTS.find((p) => p.id === pilot)?.name ?? 'Rick';
 
   useLayoutEffect(() => {
     const anim = menuIn(rootRef.current);
@@ -75,18 +79,20 @@ export function GarageMenu(props: GarageMenuProps) {
     <section ref={rootRef} className="launch-grid" aria-labelledby="title">
       <div className="cabinet">
         <div className="cabinet-window">
-          <div ref={previewRef} className="preview-stage" aria-hidden="true" />
-          <div className="hero">
-            <h1 id="title">
-              PORTAL <span>PANIC</span>
-              <i>.</i>
-            </h1>
+          {props.previewOpen && <div ref={previewRef} className="preview-stage" aria-hidden="true" />}
+          <div className={props.previewOpen ? 'sr-only' : 'hero'}>
+            <h1 id="title">Portal <span>Panic</span></h1>
             <p>{levels.length} dimensions and two bosses stand between you and the garage.</p>
           </div>
+        </div>
+        <div className="cabinet-caption">
           <p className="scene-label">
             <span>{level?.code}</span>
             <strong>{level?.name}</strong>
           </p>
+          <button className="preview-button" type="button" aria-pressed={props.previewOpen} onClick={props.onPreviewToggle}>
+            {props.previewOpen ? 'Show cover' : 'Preview level'} <span aria-hidden="true">↗</span>
+          </button>
         </div>
       </div>
 
@@ -100,6 +106,7 @@ export function GarageMenu(props: GarageMenuProps) {
             const locked = !versus && index > unlocked;
             const state = locked ? 'Locked' : !versus && index < cleared ? 'Cleared' : 'Ready';
             const selected = index === selectedLevel;
+            const status = selected && state === 'Ready' ? 'Selected' : state;
             return (
               <button
                 key={lvl.code + index}
@@ -108,12 +115,17 @@ export function GarageMenu(props: GarageMenuProps) {
                 disabled={locked}
                 aria-pressed={selected}
                 aria-label={`Level ${index + 1}: ${lvl.name}, ${state}`}
-                style={{ '--stage': lvl.rim, '--stage-bg': lvl.near } as CSSProperties}
+                style={{ '--stage': lvl.rim } as CSSProperties}
                 onClick={() => props.onLevelSelect(index)}
               >
-                <span className="level-number">{pad2(index + 1)}</span>
+                <span className="level-art" aria-hidden="true" style={{
+                  backgroundImage: `url(${dimensions})`,
+                  backgroundPosition: `${(index % 2) * 100}% ${Math.floor(index / 2) * 100 / 3}%`,
+                }} />
+                <span className="level-number" aria-hidden="true">{pad2(index + 1)}</span>
+                <span className="level-marker"><MenuIcon name={LEVEL_ICON[status]} /></span>
                 <strong>{lvl.short ?? lvl.name}</strong>
-                <small>{selected ? (state === 'Cleared' ? 'Cleared' : 'Selected') : state}</small>
+                <small>{status}</small>
               </button>
             );
           })}
@@ -122,7 +134,7 @@ export function GarageMenu(props: GarageMenuProps) {
 
       <aside className="launch-panel" aria-labelledby="playTitle">
         <div className="flex items-center justify-between gap-2">
-          <h2 id="playTitle">Play</h2>
+          <h2 id="playTitle">Launch setup</h2>
           {tools && <HeaderTools {...tools} />}
         </div>
         <div className="mode-picker" role="group" aria-label="Game mode">
@@ -175,17 +187,16 @@ export function GarageMenu(props: GarageMenuProps) {
         </div>
 
         <button ref={startRef} className="primary-button start-button" type="button" onClick={props.onStart}>
-          <span aria-hidden="true">▶</span>
           <span>{versus ? 'Start race' : 'Start solo'}</span>
+          <span aria-hidden="true">→</span>
         </button>
         {props.onShop && (
           <button type="button" className="shop-button" onClick={props.onShop}>
-            <i className="shop-coin" aria-hidden="true" />
+            <MenuIcon name="shop" />
             <span>Shop</span>
             {props.coins !== undefined && <b aria-label={`${props.coins} coins`}>{props.coins}</b>}
           </button>
         )}
-        <p className="start-detail">{versus ? level?.name : `${pilotName} · ${level?.name}`}</p>
 
         <div className="records" role="group" aria-label="Solo records on this device">
           <div>

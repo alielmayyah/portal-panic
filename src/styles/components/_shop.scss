@@ -71,11 +71,12 @@ $coin: #ffcc33;
 }
 .shop-card--upgrade { --weapon: #{$coin}; }
 .shop-card-art {
-  position: relative; display: grid; place-items: center; height: 74px; border-radius: 8px;
-  background: radial-gradient(ellipse at 60% 50%, color-mix(in srgb, var(--weapon) 30%, transparent), transparent 70%), #17111e;
-  color: var(--weapon); overflow: hidden;
-  @include crt-overlay;
-  svg { width: 112px; height: 70px; filter: drop-shadow(0 0 6px var(--weapon)); }
+  position: relative; display: grid; place-items: center; height: 118px; border-radius: 7px;
+  overflow: hidden; background: #201728; border: 1px solid #ffffff12;
+}
+.gadget-art {
+  width: 112px; height: 112px; background: url('../../assets/shop-gadgets.webp') no-repeat;
+  background-size: 300% 300%; mix-blend-mode: lighten;
 }
 .shop-badges { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; z-index: 1; }
 .shop-badge {
@@ -109,6 +110,8 @@ $coin: #ffcc33;
   &--owned { color: var(--green); font-size: .72rem; letter-spacing: .08em; }
 }
 .shop-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  .menu-icon { width: 15px; height: 15px; flex: none; }
   min-height: 36px; padding: 6px 12px; border-radius: 7px; font-size: .8rem; font-weight: 800;
   border: 1px solid #675572; background: #3b3047; color: var(--paper);
   &:hover:not(:disabled) { border-color: var(--weapon); color: var(--weapon); }
@@ -140,6 +143,7 @@ $coin: #ffcc33;
 
 // Garage: Shop button with the wallet.
 .shop-button {
+  .menu-icon { color: $coin; }
   display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; min-height: 42px; margin-top: 10px;
   border: 1px solid #6b5426; border-radius: 7px; background: linear-gradient(160deg, #3a2c19, #231a12);
   color: #f3e2b8; font-size: .86rem; font-weight: 800;

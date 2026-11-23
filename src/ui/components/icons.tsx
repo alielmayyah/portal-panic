@@ -1,4 +1,4 @@
-// Inline SVG icons copied from the original index.html markup.
+// Shared outline style for arcade controls.
 
 const stroke = {
   viewBox: '0 0 24 24',
@@ -9,6 +9,26 @@ const stroke = {
   strokeLinejoin: 'round',
   'aria-hidden': true,
 } as const;
+
+const menuPaths = {
+  shop: 'M4 10h16l-2-6H6l-2 6Zm1 0v10h14V10M9 20v-6h6v6M9 5l-1 5m7-5 1 5',
+  lock: 'M8 10V7a4 4 0 0 1 8 0v3M6 10h12v10H6zM12 14v2',
+  ready: 'm8 5 10 7-10 7V5Z',
+  selected: 'M12 3v4m0 10v4M3 12h4m10 0h4M19 12a7 7 0 1 1-14 0 7 7 0 1 1 14 0Z',
+  cleared: 'M5 21V4m0 1c5-4 9 4 15 0v10c-6 4-10-4-15 0',
+  buy: 'M3 4h3l3 11h10l2-8H7M10 19h.01M18 19h.01',
+  check: 'm4 12 5 5L20 6',
+  equip: 'M5 4v5a4 4 0 0 0 8 0V4l-4 3-4-3Zm7 8 8 8-3 2-8-9',
+  upgrade: 'm5 12 7-7 7 7m-14 6 7-7 7 7',
+} as const;
+
+export function MenuIcon({ name }: { name: keyof typeof menuPaths }) {
+  return (
+    <svg {...stroke} className="menu-icon" width="18" height="18" focusable="false">
+      <path d={menuPaths[name]} />
+    </svg>
+  );
+}
 
 export function SoundIcon({ muted }: { muted: boolean }) {
   return (

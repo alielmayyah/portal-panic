@@ -61,9 +61,11 @@ function path(g: G, pts: readonly Pt[], close: boolean): void {
 /** Filled polygon with optional outline (canvas `shape` in render.js). */
 export function shape(g: G, fill: string | null, pts: readonly Pt[], stroke?: string, width = 2): void {
   if (pts.length < 2) return;
+  // Phaser's WebGL renderer records stroke width on each vertex as the path is traced.
+  if (stroke) setLine(g, stroke, width);
   path(g, pts, true);
   if (fill) { setFill(g, fill); g.fillPath(); }
-  if (stroke) { setLine(g, stroke, width); g.strokePath(); }
+  if (stroke) g.strokePath();
 }
 
 /** Polyline. `round` adds round joints and caps, like lineJoin/lineCap 'round'. */

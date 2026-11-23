@@ -15,8 +15,9 @@ export const SOLO_KEYS: KeyMap = {
 export const VERSUS_KEYS: KeyMap = {
   KeyA: [0, 'left'], KeyD: [0, 'right'], KeyW: [0, 'jump'], KeyS: [0, 'duck'], KeyF: [0, 'fire'], KeyG: [0, 'missile'],
   ArrowLeft: [1, 'left'], ArrowRight: [1, 'right'], ArrowUp: [1, 'jump'], ArrowDown: [1, 'duck'],
-  // Right Shift via event.code only (ShiftLeft stays free); IntlBackslash is the extra ISO key beside left Shift.
-  ShiftRight: [1, 'fire'], Backslash: [1, 'missile'], IntlBackslash: [1, 'missile'],
+  // Right Shift via event.code only (ShiftLeft stays free). IntlBackslash (the ISO key beside left Shift)
+  // is deliberately unbound: it sits under Rick's hand, so Rick could spend Morty's missiles.
+  ShiftRight: [1, 'fire'], Backslash: [1, 'missile'],
   // Weapon swap (weapons.ts): Q for Rick, Right Ctrl for Morty.
   KeyQ: [0, 'swap'], ControlRight: [1, 'swap'],
 };
